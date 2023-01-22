@@ -134,15 +134,6 @@ run_jail() (
 	fi
 )
 
-# Properly escape value of variable so it can be echoed to a bash file
-escape() {
-    local tmp
-    tmp="${1}"
-    tmp="$(declare -p tmp)"
-    tmp="${tmp#*=}"
-    echo "${tmp}"
-}
-
 create_jail() {
 
 	read -p "Create a new jail? [Y/n] " -n 1 -r REPLY && echo
@@ -212,6 +203,11 @@ Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} the
 
 	read_name
 
+	local jail_rootfs_name systemd_run_additional_args systemd_nspawn_additional_args
+	jail_rootfs_name='rootfs'
+	systemd_run_additional_args="--unit='${SYSTEMD_RUN_UNIT_NAME}' --description='jailmaker ${JAIL_NAME}'"
+	systemd_nspawn_additional_args="--machine='${JAIL_NAME}' --directory='./${jail_rootfs_name}'"
+
 	echo "${SCRIPT_NAME} will not install docker for you."
 	echo "But it can configure the jail with the capabilities required to run docker."
 	echo "You can turn DOCKER_COMPATIBLE mode on/off post-install."
@@ -242,14 +238,12 @@ Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} the
 	# weird chars :?\"
 	# the corresponding command would be:
 	# --bind-ro='/mnt/data/weird chars \:?\\"'
-	local systemd_nspawn_user_args
-	eval "$(echo "${SYSTEMD_NSPAWN_USER_ARGS_STRING}" | xargs bash -c 'declare -a systemd_nspawn_user_args=("$@"); declare -p systemd_nspawn_user_args' --)"
+	systemd_nspawn_additional_args+="$(echo "${SYSTEMD_NSPAWN_USER_ARGS_STRING}" | xargs bash -c 's=""; for t in "$@"; do t="$(declare -p t)"; t="${t#*=}"; s+=" ${t}"; done; echo "${s}"' --)"
 	# https://superuser.com/a/1529316/1268213
 	# https://superuser.com/a/1627765
-	
+
 	# Create directory for rootfs
-	JAIL_ROOTFS_NAME='rootfs'
-	JAIL_ROOTFS_PATH="${JAIL_PATH}/${JAIL_ROOTFS_NAME}"
+	JAIL_ROOTFS_PATH="${JAIL_PATH}/${jail_rootfs_name}"
 	mkdir -p "${JAIL_ROOTFS_PATH}"
 
 	JAIL_CONFIG_NAME='config'
@@ -296,11 +290,6 @@ Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} the
 
 	JAIL_CONFIG_NAME='start.sh'
 	JAIL_CONFIG_PATH="${JAIL_PATH}/${JAIL_CONFIG_NAME}"
-
-	local systemd_run_additional_args systemd_nspawn_additional_args
-	systemd_run_additional_args="--unit='${SYSTEMD_RUN_UNIT_NAME}' --description='jailmaker ${JAIL_NAME}'"
-	systemd_nspawn_additional_args="--machine='${JAIL_NAME}' --directory='./${JAIL_ROOTFS_NAME}'"
-	for i in "${systemd_nspawn_user_args[@]}"; do systemd_nspawn_additional_args+=" $(escape "$i")"; done
 
 	cat <<-EOF >"${JAIL_CONFIG_PATH}"
 		#!/bin/bash
