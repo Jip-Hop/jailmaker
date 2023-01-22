@@ -16,10 +16,7 @@ JAIL_NAME=
 JAIL_PATH=
 DISTRO=
 RELEASE=
-SYSTEMD_RUN_CMD=(systemd-run --setenv=SYSTEMD_NSPAWN_LOCK=0 --property=KillMode=mixed
-	--property=Type=notify --property=RestartForceExitStatus=133 --property=SuccessExitStatus=133
-	--property=Delegate=yes --property=TasksMax=16384 --same-dir)
-SYSTEMD_NSPAWN_CMD=(systemd-nspawn --keep-unit --quiet --boot)
+SYSTEMD_RUN_UNIT_NAME=
 DONE=0
 
 USAGE="WARNING: EXPERIMENTAL AND WORK IN PROGRESS, USE ONLY FOR TESTING!
@@ -66,7 +63,7 @@ read_name() {
 	local jail_path
 
 	while true; do
-		read -r -p "Enter jail name: " jail_name && echo
+		read -e -r -p "Enter jail name: " jail_name && echo
 		if ! [[ "${jail_name}" =~ ^[.a-zA-Z0-9-]{1,64}$ && "${jail_name}" != '.'* && "${jail_name}" != *'.' && "${jail_name}" != *'..'* ]]; then
 			cat <<-'EOF'
 				A valid name consists of:
@@ -87,6 +84,7 @@ read_name() {
 				# else the wrong directory may be cleaned up!
 				JAIL_NAME="${jail_name}"
 				JAIL_PATH="${jail_path}"
+				SYSTEMD_RUN_UNIT_NAME="jlmkr-${JAIL_NAME}"
 				return
 			fi
 		fi
@@ -95,43 +93,43 @@ read_name() {
 
 run_jail() (
 	# Create a sub-shell to source the conf file
-	set -eEuo pipefail
 
 	RUN_DOCKER=
 	GPU_PASSTHROUGH=
-	SYSTEMD_RUN_CMD=()
-	SYSTEMD_NSPAWN_CMD=()
+	SYSTEMD_RUN_ADDITIONAL_ARGS=()
+	SYSTEMD_NSPAWN_ADDITIONAL_ARGS=()
 
-	# Load the config
+	echo 'Load the config'
 	# shellcheck disable=SC1090
 	. "${1}"
+	echo 'Config loaded'
 
-	if [[ ${#SYSTEMD_RUN_CMD[@]} -ne 0 && ${#SYSTEMD_NSPAWN_CMD[@]} -ne 0 ]]; then
+	set -eEuo pipefail
+	if [[ "$(type -t start)" == 'function' ]]; then
 		if [[ "${RUN_DOCKER}" -eq 1 ]]; then
 			# Enable ip forwarding on the host (docker needs it)
 			echo 1 >/proc/sys/net/ipv4/ip_forward
 			# To properly run docker inside the jail, we need to lift restrictions
 			# Without DevicePolicy=auto images with device nodes may not be pulled
 			# https://github.com/kinvolk/kube-spawn/pull/328
-			SYSTEMD_RUN_CMD+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
+			SYSTEMD_RUN_ADDITIONAL_ARGS+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
 			# Add additional flags required for docker
-			SYSTEMD_NSPAWN_CMD+=(--capability=all "--system-call-filter='add_key keyctl bpf'")
+			SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--capability=all --system-call-filter='add_key keyctl bpf')
 		fi
 
 		if [[ "${GPU_PASSTHROUGH}" -eq 1 ]]; then
-			SYSTEMD_NSPAWN_CMD+=("--property=DeviceAllow='char-drm rw'")
+			SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--property=DeviceAllow='char-drm rw')
 
 			# Detect intel GPU device and if present add bind flag
-			[[ -d /dev/dri ]] && SYSTEMD_NSPAWN_CMD+=(--bind=/dev/dri)
+			[[ -d /dev/dri ]] && SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--bind=/dev/dri)
 
 			# TODO: add bind mount flags in case of nvidia GPU passthrough
 		fi
 
-		FINAL_COMMAND=" ${SYSTEMD_RUN_CMD[*]} -- ${SYSTEMD_NSPAWN_CMD[*]}"
-		echo "Starting jail with the following command:"
-		echo "${FINAL_COMMAND}"
-		echo
-		eval "${FINAL_COMMAND}"
+		echo "Starting jail..."
+		start
+	else
+		echo "Can't call the start function since the conf file didn't contain one..."
 	fi
 )
 
@@ -147,7 +145,7 @@ Currently it can't decide if it's safe to create files in:
 ${SCRIPT_DIR_PATH}
 Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} there and try again."
 
-read -p "Start the jail when the installation is complete? [Y/n] " -n 1 -r REPLY && echo
+read -p "Start the jail when installation is complete? [Y/n] " -n 1 -r REPLY && echo
 # Enter accepts default (yes)
 [[ "${REPLY}" =~ ^([Yy]|)$ ]] && START_JAIL=1
 
@@ -190,9 +188,6 @@ read_name
 # Create directory for rootfs
 JAIL_ROOTFS_PATH="${JAIL_PATH}/rootfs"
 mkdir -p "${JAIL_ROOTFS_PATH}"
-
-SYSTEMD_RUN_CMD+=("--description='jailmaker ${JAIL_NAME}'")
-SYSTEMD_NSPAWN_CMD+=(--machine="${JAIL_NAME}" "--directory='./${JAIL_ROOTFS_PATH}'")
 
 echo "You may choose which distro to install (Ubuntu, CentOS, Alpine etc.)"
 echo "Or you may install the recommended distro: Debian 11."
@@ -244,25 +239,57 @@ if [[ "${INSTALL_DOCKER}" -eq 1 ]]; then
 	# TODO: also install nvidia-docker2 if GPU_PASSTHROUGH=1 and nvidia GPU is present
 fi
 
-JAIL_CONFIG_NAME='conf'
+JAIL_CONFIG_NAME='start.sh'
 JAIL_CONFIG_PATH="${JAIL_PATH}/${JAIL_CONFIG_NAME}"
 
-echo "${SYSTEMD_RUN_CMD[*]}"
-echo "${SYSTEMD_NSPAWN_CMD[*]}"
 cat <<-EOF >"${JAIL_CONFIG_PATH}"
-	# This file will be sourced in a a bash sub-shell before starting the jail.
+	#!/bin/bash
+	# This file will be sourced in a a bash sub-shell by ${SCRIPT_NAME}.
+	# The start function will be called to start the jail.
 	# You can change the settings below and/or add custom code.
-	RUN_DOCKER=${INSTALL_DOCKER}
-	GPU_PASSTHROUGH=${GPU_PASSTHROUGH}
-EOF
+	set -eEuo pipefail
 
-# Also add arrays containing the commands to run
-declare -p SYSTEMD_RUN_CMD SYSTEMD_NSPAWN_CMD >>"${JAIL_CONFIG_PATH}"
+	# Set RUN_DOCKER=1 to automatically add additional arguments required to properly run docker inside the jail
+	RUN_DOCKER=${INSTALL_DOCKER}
+	# Set GPU_PASSTHROUGH=1 to automatically add additional arguments to access the GPU inside the jail
+	GPU_PASSTHROUGH=${GPU_PASSTHROUGH}
+
+	# You may add additional args to the two arrays below.
+	# These args will be passed to systemd-run and systemd-nspawn in the start function.
+	SYSTEMD_RUN_ADDITIONAL_ARGS=()
+	SYSTEMD_NSPAWN_ADDITIONAL_ARGS=()
+
+	start(){
+		systemd-run --property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133 \
+			--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=16384 --same-dir \
+			--collect \
+			--setenv=SYSTEMD_NSPAWN_LOCK=0 \
+			--unit='${SYSTEMD_RUN_UNIT_NAME}' \
+			--description='jailmaker ${JAIL_NAME}' \
+			"\${SYSTEMD_RUN_ADDITIONAL_ARGS[@]}" \
+			-- \
+			systemd-nspawn --keep-unit --quiet --boot \
+			--machine='${JAIL_NAME}' \
+			--directory='./${JAIL_ROOTFS_PATH}' \
+			"\${SYSTEMD_NSPAWN_ADDITIONAL_ARGS[@]}"
+	}
+
+	# Call the start function if this script is executed directly (not sourced)
+	# https://stackoverflow.com/a/28776166
+	(return 0 2>/dev/null) || {
+		echo 'This script was called directly, not sourced.'
+		echo 'The jail will now start...'
+		echo 'But the RUN_DOCKER and GPU_PASSTHROUGH settings are not considered.'
+		echo 'For this to work, start the jail from ${SCRIPT_NAME}.'
+		start
+	}
+EOF
 
 echo "FROM CONF"
 cat "${JAIL_CONFIG_PATH}"
-chmod 600 "${JAIL_CONFIG_PATH}"
+chmod 700 "${JAIL_CONFIG_PATH}"
 
-[[ "${START_JAIL}" -eq 1 ]] && run_jail "${JAIL_CONFIG_PATH}"
+echo $START_JAIL
+if [[ "${START_JAIL}" -eq 1 ]]; then run_jail "${JAIL_CONFIG_PATH}"; else echo "Skip running jail"; fi
 
 DONE=1
