@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eEuo pipefail
+set -euo pipefail
 shopt -s nullglob
 
 ABSOLUTE_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
@@ -16,9 +16,7 @@ TODO: complete writing usage
 
 JAILS_DIR_PATH='jails'
 JAIL_ROOTFS_NAME='rootfs'
-JAIL_PATH=
 JAIL_CONFIG_NAME='config'
-JAIL_START_SCRIPT_NAME='start.sh'
 
 fail() {
 	echo -e "$1" >&2 && exit 1
@@ -35,33 +33,39 @@ err() {
 # Trap errors
 trap 'err $LINENO' ERR
 
-#########################
-# START RUN FUNCTIONALITY
-#########################
+#####################
+# START FUNCTIONALITY
+#####################
 
 start_jail() {
-	local jail_config_path jail_start_script_path docker_compatible gpu_passthrough key value
+	local jail_name="${1}"
+	local jail_path="${JAILS_DIR_PATH}/${jail_name}"
+	local jail_config_path="${jail_path}/${JAIL_CONFIG_NAME}"
 
-	jail_config_path="${1}/${JAIL_CONFIG_NAME}"
-	jail_start_script_path="${1}/${JAIL_START_SCRIPT_NAME}"
-
-	! [[ -f "${jail_start_script_path}" ]] && fail "ERROR: Couldn't find: ${jail_start_script_path}"
 	! [[ -f "${jail_config_path}" ]] && fail "ERROR: Couldn't find: ${jail_config_path}"
 
 	echo 'Load the config'
 
-	# TODO: also load the additional (user) args for nspawn from this file!
-	while IFS="=" read -r key value || [ -n "$key" ]; do
+	local key value
+
+	while read -r line || [ -n "$line" ]; do
+		key="${line%%=*}"
+		value="${line#*=}"
+
 		case "${key}" in
-		"DOCKER_COMPATIBLE") docker_compatible="$value" ;;
-		"GPU_PASSTHROUGH") gpu_passthrough="$value" ;;
+		"DOCKER_COMPATIBLE") local docker_compatible="$value" ;;
+		"GPU_PASSTHROUGH") local gpu_passthrough="$value" ;;
+		"SYSTEMD_NSPAWN_USER_ARGS") local systemd_nspawn_user_args="$value" ;;
+		"SYSTEMD_RUN_DEFAULT_ARGS") local systemd_run_default_args="$value" ;;
+		"SYSTEMD_NSPAWN_DEFAULT_ARGS") local systemd_nspawn_default_args="$value" ;;
 		esac
+
 	done <"${jail_config_path}"
 
 	echo 'Config loaded'
 
-	SYSTEMD_RUN_ADDITIONAL_ARGS=()
-	SYSTEMD_NSPAWN_ADDITIONAL_ARGS=()
+	local systemd_run_additional_args=("--unit='jlmkr-${jail_name}'" "--working-directory='./${jail_path}'" "--description='jailmaker ${jail_name}'")
+	local systemd_nspawn_additional_args=("--machine='${jail_name}'" "--directory='${JAIL_ROOTFS_NAME}'")
 
 	if [[ "${docker_compatible}" -eq 1 ]]; then
 		# Enable ip forwarding on the host (docker needs it)
@@ -69,36 +73,37 @@ start_jail() {
 		# To properly run docker inside the jail, we need to lift restrictions
 		# Without DevicePolicy=auto images with device nodes may not be pulled
 		# https://github.com/kinvolk/kube-spawn/pull/328
-		SYSTEMD_RUN_ADDITIONAL_ARGS+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
+		systemd_run_additional_args+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
 		# Add additional flags required for docker
-		SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--capability=all --system-call-filter='add_key keyctl bpf')
+		systemd_nspawn_additional_args+=(--capability=all "--system-call-filter='add_key keyctl bpf'")
 	fi
 
 	if [[ "${gpu_passthrough}" -eq 1 ]]; then
-		SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--property=DeviceAllow='char-drm rw')
+		systemd_nspawn_additional_args+=("--property=DeviceAllow='char-drm rw'")
 
 		# Detect intel GPU device and if present add bind flag
-		[[ -d /dev/dri ]] && SYSTEMD_NSPAWN_ADDITIONAL_ARGS+=(--bind=/dev/dri)
+		[[ -d /dev/dri ]] && systemd_nspawn_additional_args+=(--bind=/dev/dri)
 
 		# TODO: add bind mount flags in case of nvidia GPU passthrough
 	fi
 
-	# Pass the two arrays to the start script
-	# https://stackoverflow.com/a/43687593
-	echo "Starting jail..."
+	local cmd=(systemd-run "${systemd_run_default_args}" "${systemd_run_additional_args[*]}" --
+		systemd-nspawn "${systemd_nspawn_default_args}" "${systemd_nspawn_additional_args[*]} ${systemd_nspawn_user_args}")
 
-	"./${jail_start_script_path}" \
-		"${#SYSTEMD_RUN_ADDITIONAL_ARGS[@]}" "${SYSTEMD_RUN_ADDITIONAL_ARGS[@]}" \
-		"${#SYSTEMD_NSPAWN_ADDITIONAL_ARGS[@]}" "${SYSTEMD_NSPAWN_ADDITIONAL_ARGS[@]}"
+	echo "Starting jail with command:"
+	echo "${cmd[*]}"
+
+	eval "${cmd[*]}"
 }
 
-############################
-# START CREATE FUNCTIONALITY
-############################
+######################
+# CREATE FUNCTIONALITY
+#######################
 
 cleanup() {
-	# Remove the JAIL_PATH (if set, a directory and not the root directory)
-	[[ -d "${JAIL_PATH}" ]] && echo -e "\n\nCleaning up: ${JAIL_PATH}\n" && rm -rf "${JAIL_PATH}"
+	# Remove the jail_path if it's a directory
+	local jail_path="${1}"
+	[[ -d "${jail_path}" ]] && echo -e "\n\nCleaning up: ${jail_path}\n" && rm -rf "${jail_path}"
 }
 
 stat_chmod() {
@@ -110,87 +115,14 @@ validate_download_script() {
 	echo "6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4  ${1}" | sha256sum --check >/dev/null
 }
 
-# Use a function as template instead of heredoc
-# This allows syntax highlighting and linting to work
-# Template function must return the line number,
-# this marks the start of the template
-template_start_script() {
-	echo "$((LINENO + 1))" && return
-	# TEMPLATE START
-	#!/bin/bash
-	set -euo pipefail
-
-	# If this script is called from PLACEHOLDER_SCRIPT_NAME
-	# and DOCKER_COMPATIBLE or GPU_PASSTHROUGH is enabled
-	# then these arrays will be filled with additional args
-	SYSTEMD_RUN_ADDITIONAL_ARGS=("${@:2:$1}") && shift "$(($1 + 1))"
-	SYSTEMD_NSPAWN_ADDITIONAL_ARGS=("${@:2:$1}") && shift "$(($1 + 1))"
-
-	# Move into the directory where this script is stored (commands are relative to this directory)
-	cd "$(dirname "${BASH_SOURCE[0]}")" || exit
-	# Get the name of the jail from the directory name
-	JAIL_NAME="$(basename "$(pwd)")"
-
-	# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file
-	# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
-	# TODO: also compare settings for docker: https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
-	systemd-run --property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133 \
-		--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=16384 --same-dir \
-		--collect --setenv=SYSTEMD_NSPAWN_LOCK=0 \
-		--unit="jlmkr-${JAIL_NAME}" --description="jailmaker ${JAIL_NAME}" \
-		"${SYSTEMD_RUN_ADDITIONAL_ARGS[@]}" \
-		-- \
-		systemd-nspawn --keep-unit --quiet --boot \
-		--machine="${JAIL_NAME}" --directory='./PLACEHOLDER_ROOTFS_NAME' \
-		PLACEHOLDER_SYSTEMD_NSPAWN_USER_ARGS \
-		"${SYSTEMD_NSPAWN_ADDITIONAL_ARGS[@]}"
-	# TEMPLATE END
-}
-
-# Helper function to process the body of a function into a bash string
-# which can be written as a new bash script
-# Includes find-replace functionality to substitute placeholders in the template
-process_template() {
-	local indent=""
-	# Read the current script file, starting from the passed line number
-	while IFS=$'\n' read -r line; do
-		# Get the indent level from the first line
-		[[ -z "${indent}" ]] && indent="${line%%#*}" && continue
-
-		# Break when we find the end of the template
-		[[ "$line" = "${indent}# TEMPLATE END" ]] && break
-
-		# Remove the indent from the start
-		line="${line#"$indent"}"
-
-		local find replace
-		# Loop over the additional argument pairs passed
-		# and find/replace template key with value
-		for ((n = 2; n <= $#; n++)); do
-			# https://stackoverflow.com/a/3575950
-			# Indirect expansion: look up the value of the variable whose name is in the variable
-			# So this looks up the nth argument passed to this function
-			find=${!n}
-			# Increment counter by one to get next argument
-			((n++))
-			replace=${!n}
-			line=${line//$find/$replace}
-		done
-
-		echo "${line}"
-	done < <(tail -n "+${1}" "${ABSOLUTE_SCRIPT_PATH}")
-}
-
 create_jail() {
 	# TODO: show disclaimer
-	local reply arch distro release lxc_dir_path lxc_cache_path lxc_download_script_path
-	local jail_config_path jail_start_script_path docker_compatible gpu_passthrough
-	local jail_name systemd_nspawn_user_args
 
+	local arch
 	arch="$(dpkg --print-architecture)"
-	lxc_dir_path='.lxc'
-	lxc_cache_path="${lxc_dir_path}/cache"
-	lxc_download_script_path="${lxc_dir_path}/lxc-download.sh"
+	local lxc_dir_path='.lxc'
+	local lxc_cache_path="${lxc_dir_path}/cache"
+	local lxc_download_script_path="${lxc_dir_path}/lxc-download.sh"
 
 	[[ "$(basename "${SCRIPT_DIR_PATH}")" != 'jailmaker' ]] && {
 		echo "${SCRIPT_NAME} needs to create files."
@@ -198,6 +130,8 @@ create_jail() {
 		echo "${SCRIPT_DIR_PATH}"
 		fail "Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} there and try again."
 	}
+
+	local reply
 
 	if [[ $(findmnt --target . --output TARGET --noheadings --first-only) != /mnt/* ]]; then
 		echo "${SCRIPT_NAME} should be on a pool mounted under /mnt (it currently isn't)."
@@ -234,6 +168,8 @@ create_jail() {
 
 	stat_chmod 700 "${lxc_download_script_path}"
 
+	local distro release
+
 	read -p "Install the recommended distro (Debian 11)? [Y/n] " -n 1 -r reply && echo
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
 		distro='debian'
@@ -254,6 +190,8 @@ create_jail() {
 		read -e -r -p "Release: " release && echo
 	fi
 
+	local jail_name jail_path
+
 	while true; do
 		read -e -r -p "Enter jail name: " jail_name && echo
 		if ! [[ "${jail_name}" =~ ^[.a-zA-Z0-9-]{1,64}$ && "${jail_name}" != '.'* && "${jail_name}" != *'.' && "${jail_name}" != *'..'* ]]; then
@@ -266,9 +204,9 @@ create_jail() {
 
 			EOF
 		else
-			JAIL_PATH="${JAILS_DIR_PATH}/${jail_name}"
+			jail_path="${JAILS_DIR_PATH}/${jail_name}"
 
-			if [[ -e "${JAIL_PATH}" ]]; then
+			if [[ -e "${jail_path}" ]]; then
 				echo "A jail with this name already exists."
 				echo
 			else
@@ -278,9 +216,11 @@ create_jail() {
 		fi
 	done
 
-	# Cleanup on exit, but only once the JAIL_PATH is final
+	# Cleanup on exit, but only once the jail_path is final
 	# Otherwise we may cleanup the wrong directory
-	trap cleanup EXIT
+	trap 'cleanup "${jail_path}"' EXIT
+
+	local docker_compatible gpu_passthrough systemd_nspawn_user_args
 
 	echo "${SCRIPT_NAME} will not install docker for you."
 	echo "But it can configure the jail with the capabilities required to run docker."
@@ -294,7 +234,7 @@ create_jail() {
 	# Enter accepts default (no)
 	if ! [[ "${reply}" =~ ^[Yy]$ ]]; then gpu_passthrough=0; else gpu_passthrough=1; fi
 
-	# TODO: ask for network setup (host, macvlan, bridge, physical nic)
+	# TODO: ask to show nspawn manual
 	echo
 	echo "You may pass additional systemd-nspawn flags."
 	echo "For example to mount directories inside the jail you may add:"
@@ -313,17 +253,17 @@ create_jail() {
 	# --bind-ro='/mnt/data/weird chars \:?\\"'
 
 	# Create directory for rootfs
-	JAIL_ROOTFS_PATH="${JAIL_PATH}/${JAIL_ROOTFS_NAME}"
+	JAIL_ROOTFS_PATH="${jail_path}/${JAIL_ROOTFS_NAME}"
 	mkdir -p "${JAIL_ROOTFS_PATH}"
 
-	jail_config_path="${JAIL_PATH}/${JAIL_CONFIG_NAME}"
+	local jail_config_path="${jail_path}/${JAIL_CONFIG_NAME}"
 	# LXC download script needs to write to this file during install
 	# but we don't need it so we will remove it later
 	touch "${jail_config_path}"
 
 	echo
 	LXC_CACHE_PATH=${lxc_cache_path} "${lxc_download_script_path}" \
-		--name="${jail_name}" --path="${JAIL_PATH}" --rootfs="${JAIL_ROOTFS_PATH}" \
+		--name="${jail_name}" --path="${jail_path}" --rootfs="${JAIL_ROOTFS_PATH}" \
 		--arch="${arch}" --dist="${distro}" --release="${release}" ||
 		fail "Aborted creating rootfs..."
 	echo
@@ -355,20 +295,27 @@ create_jail() {
 	# https://github.com/systemd/systemd/issues/852
 	printf 'pts/%d\n' $(seq 0 10) >"${JAIL_ROOTFS_PATH}/etc/securetty"
 
-	jail_start_script_path="${JAIL_PATH}/${JAIL_START_SCRIPT_NAME}"
+	# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file
+	# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
+	# TODO: also compare settings for docker: https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
 
-	cat <<-EOF >"${jail_config_path}"
-		DOCKER_COMPATIBLE=${docker_compatible}
-		GPU_PASSTHROUGH=${gpu_passthrough}
-	EOF
+	local systemd_run_default_args=(--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133
+		--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=16384 --collect
+		--setenv=SYSTEMD_NSPAWN_LOCK=0)
+
+	local systemd_nspawn_default_args=(--keep-unit --quiet --boot)
+
+	{
+		echo "DOCKER_COMPATIBLE=${docker_compatible}"
+		echo "GPU_PASSTHROUGH=${gpu_passthrough}"
+		echo "SYSTEMD_NSPAWN_USER_ARGS=${systemd_nspawn_user_args}"
+		echo
+		echo "# You generally won't need to change the options below"
+		echo "SYSTEMD_RUN_DEFAULT_ARGS=${systemd_run_default_args[*]}"
+		echo "SYSTEMD_NSPAWN_DEFAULT_ARGS=${systemd_nspawn_default_args[*]}"
+	} >"${jail_config_path}"
 
 	chmod 700 "${jail_config_path}"
-
-	process_template "$(template_start_script)" \
-		PLACEHOLDER_ROOTFS_NAME "${JAIL_ROOTFS_NAME}" PLACEHOLDER_SYSTEMD_NSPAWN_USER_ARGS "${systemd_nspawn_user_args}" \
-		PLACEHOLDER_SCRIPT_NAME "${SCRIPT_NAME}" >"${jail_start_script_path}"
-
-	chmod 700 "${jail_start_script_path}"
 
 	# Remove the cleanup trap on exit
 	trap - EXIT
@@ -377,15 +324,15 @@ create_jail() {
 	read -p "Start the jail now? [Y/n] " -n 1 -r reply && echo
 	# Enter accepts default (yes)
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
-		start_jail "${JAIL_PATH}"
+		start_jail "${jail_name}"
 	else
 		echo 'Skipped starting jail.'
 	fi
 }
 
-##########################
-# END CREATE FUNCTIONALITY
-##########################
+#######################
+# COMMAND LINE HANDLING
+#######################
 
 # TODO document
 # machinectl shell
@@ -399,6 +346,7 @@ create_jail() {
 # machinectl login
 # TODO: recommend ssh ;)
 # TODO: create a jlmkr shell command to try the above in case machinectl shell doesn't work
+# TODO: document journalctl -u jlmkr-jailname
 
 case "${1-""}" in
 
@@ -418,7 +366,7 @@ create)
 	;;
 
 start)
-	start_jail "${JAILS_DIR_PATH}/${2}"
+	start_jail "${2}"
 	;;
 
 *)
