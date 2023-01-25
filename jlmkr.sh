@@ -9,7 +9,7 @@ SCRIPT_DIR_PATH="$(dirname "${ABSOLUTE_SCRIPT_PATH}")"
 
 USAGE="WARNING: EXPERIMENTAL AND WORK IN PROGRESS, USE ONLY FOR TESTING!
 TODO: add version string
-Usage: ./${SCRIPT_NAME} COMMAND [ARG...]
+Usage: ./${SCRIPT_NAME} COMMAND [ARG]
 
 TODO: complete writing usage
 "
@@ -38,13 +38,14 @@ trap 'err $LINENO' ERR
 #####################
 
 start_jail() {
+	[[ -z "${1}" ]] && fail "Please specify the name of the jail to start."
 	local jail_name="${1}"
 	local jail_path="${JAILS_DIR_PATH}/${jail_name}"
 	local jail_config_path="${jail_path}/${JAIL_CONFIG_NAME}"
 
-	! [[ -f "${jail_config_path}" ]] && fail "ERROR: Couldn't find: ${jail_config_path}"
+	! [[ -f "${jail_config_path}" ]] && fail "ERROR: Couldn't find: ${jail_config_path}."
 
-	echo 'Load the config'
+	echo 'Loading config...'
 
 	local key value
 
@@ -62,7 +63,7 @@ start_jail() {
 
 	done <"${jail_config_path}"
 
-	echo 'Config loaded'
+	echo 'Config loaded!'
 
 	local systemd_run_additional_args=("--unit='jlmkr-${jail_name}'" "--working-directory='./${jail_path}'" "--description='jailmaker ${jail_name}'")
 	local systemd_nspawn_additional_args=("--machine='${jail_name}'" "--directory='${JAIL_ROOTFS_NAME}'")
@@ -99,16 +100,31 @@ start_jail() {
 
 	local cmd=(systemd-run "${systemd_run_default_args}" "${systemd_run_additional_args[*]}" --
 		systemd-nspawn "${systemd_nspawn_default_args}" "${systemd_nspawn_additional_args[*]} ${systemd_nspawn_user_args}")
-
+	
+	echo
 	echo "Starting jail with command:"
 	echo "${cmd[*]}"
+	echo
 
 	eval "${cmd[*]}"
+	
+	echo
+	echo "Check logging:"
+	echo "journalctl -u jlmkr-${jail_name}"
+	echo
+	echo "Check status:"
+	echo "systemctl status jlmkr-${jail_name}"
+	echo
+	echo "Stop the jail:"
+	echo "machinectl stop ${jail_name}"
+	echo
+	echo "Get a shell:"
+	echo "machinectl shell ${jail_name}"
 }
 
 ######################
 # CREATE FUNCTIONALITY
-#######################
+######################
 
 cleanup() {
 	# Remove the jail_path if it's a directory
@@ -376,7 +392,7 @@ create)
 	;;
 
 start)
-	start_jail "${2}"
+	start_jail "${2-""}"
 	;;
 
 *)
