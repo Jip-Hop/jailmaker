@@ -11,6 +11,7 @@ LXC_CACHE_PATH="${LXC_DIR_PATH}/cache"
 LXC_DOWNLOAD_SCRIPT_PATH="${LXC_DIR_PATH}/lxc-download.sh"
 ARCH="$(dpkg --print-architecture)"
 JAILS_DIR_PATH='jails'
+JAIL_ROOTFS_NAME='rootfs'
 JAIL_NAME=
 JAIL_PATH=
 DISTRO=
@@ -55,6 +56,7 @@ stat_chmod() {
 	if [[ "$(stat -c%a "${2}")" -ne "${1}" ]]; then chmod "${1}" "${2}"; fi
 }
 
+# TODO: put body inside the create function (no need for a function)
 read_name() {
 	local jail_name
 	local jail_path
@@ -134,6 +136,22 @@ run_jail() (
 	fi
 )
 
+escape() {
+	s=""
+	for t in "$@"; do
+		t="$(declare -p t)"
+		t="${t#*=}"
+		s+=" ${t}"
+	done
+	echo "${s}"
+}
+
+# TODO: remove indent
+# https://stackoverflow.com/questions/6916856/can-bash-show-a-functions-definition
+get_function_body() {
+	type "${1}" | sed '1,3d;$d'
+}
+
 create_jail() {
 
 	read -p "Create a new jail? [Y/n] " -n 1 -r REPLY && echo
@@ -203,10 +221,10 @@ Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} the
 
 	read_name
 
-	local jail_rootfs_name systemd_run_additional_args systemd_nspawn_additional_args
-	jail_rootfs_name='rootfs'
+	local systemd_run_additional_args systemd_nspawn_additional_args
+	# TODO: don't use jail name inside these strings? Allow reading the basename of dir containing the script?
 	systemd_run_additional_args="--unit='${SYSTEMD_RUN_UNIT_NAME}' --description='jailmaker ${JAIL_NAME}'"
-	systemd_nspawn_additional_args="--machine='${JAIL_NAME}' --directory='./${jail_rootfs_name}'"
+	systemd_nspawn_additional_args="--machine='${JAIL_NAME}' --directory='./${JAIL_ROOTFS_NAME}'"
 
 	echo "${SCRIPT_NAME} will not install docker for you."
 	echo "But it can configure the jail with the capabilities required to run docker."
@@ -238,12 +256,16 @@ Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} the
 	# weird chars :?\"
 	# the corresponding command would be:
 	# --bind-ro='/mnt/data/weird chars \:?\\"'
-	systemd_nspawn_additional_args+="$(echo "${SYSTEMD_NSPAWN_USER_ARGS_STRING}" | xargs bash -c 's=""; for t in "$@"; do t="$(declare -p t)"; t="${t#*=}"; s+=" ${t}"; done; echo "${s}"' --)"
+	echo "$(get_function_body escape)"
+	systemd_nspawn_additional_args+="$(echo "${SYSTEMD_NSPAWN_USER_ARGS_STRING}" | xargs bash -c "$(get_function_body escape)" --)"
+	echo "$systemd_nspawn_additional_args"
+	cleanup
+	exit
 	# https://superuser.com/a/1529316/1268213
 	# https://superuser.com/a/1627765
 
 	# Create directory for rootfs
-	JAIL_ROOTFS_PATH="${JAIL_PATH}/${jail_rootfs_name}"
+	JAIL_ROOTFS_PATH="${JAIL_PATH}/${JAIL_ROOTFS_NAME}"
 	mkdir -p "${JAIL_ROOTFS_PATH}"
 
 	JAIL_CONFIG_NAME='config'
