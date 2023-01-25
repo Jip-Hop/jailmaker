@@ -84,7 +84,17 @@ start_jail() {
 		# Detect intel GPU device and if present add bind flag
 		[[ -d /dev/dri ]] && systemd_nspawn_additional_args+=(--bind=/dev/dri)
 
-		# TODO: add bind mount flags in case of nvidia GPU passthrough
+		# Detect nvidia GPU
+		if [[ -d /dev/nvidia ]]; then
+			# Mount the nvidia driver files, so we are always in sync with the host
+			while read -r line; do
+				if [[ "${line}" == /dev/* ]]; then
+					systemd_nspawn_additional_args+=("--bind='${line}'")
+				else
+					systemd_nspawn_additional_args+=("--bind-ro='${line}'")
+				fi
+			done < <(nvidia-container-cli list)
+		fi
 	fi
 
 	local cmd=(systemd-run "${systemd_run_default_args}" "${systemd_run_additional_args[*]}" --
