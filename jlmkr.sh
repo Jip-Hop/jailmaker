@@ -18,20 +18,24 @@ JAILS_DIR_PATH='jails'
 JAIL_ROOTFS_NAME='rootfs'
 JAIL_CONFIG_NAME='config'
 
+error() {
+	echo -e "${1}" >&2
+}
+
 fail() {
-	echo -e "$1" >&2 && exit 1
+	error "${1}" && exit 1
 }
 
 [[ $UID -ne 0 ]] && echo "${USAGE}" && fail "Run this script as root..."
 
-err() {
+trace() {
 	# https://unix.stackexchange.com/a/504829/477308
 	echo 'Error occurred:'
 	awk 'NR>L-4 && NR<L+4 { printf "%-5d%3s%s\n",NR,(NR==L?">>>":""),$0 }' L="${1}" "${ABSOLUTE_SCRIPT_PATH}"
 }
 
 # Trap errors
-trap 'err $LINENO' ERR
+trap 'trace $LINENO' ERR
 
 #####################
 # START FUNCTIONALITY
@@ -54,19 +58,19 @@ start_jail() {
 		value="${line#*=}"
 
 		case "${key}" in
-		"DOCKER_COMPATIBLE") local docker_compatible="$value" ;;
-		"GPU_PASSTHROUGH") local gpu_passthrough="$value" ;;
-		"SYSTEMD_NSPAWN_USER_ARGS") local systemd_nspawn_user_args="$value" ;;
-		"SYSTEMD_RUN_DEFAULT_ARGS") local systemd_run_default_args="$value" ;;
-		"SYSTEMD_NSPAWN_DEFAULT_ARGS") local systemd_nspawn_default_args="$value" ;;
+		"DOCKER_COMPATIBLE") local docker_compatible="${value}" ;;
+		"GPU_PASSTHROUGH") local gpu_passthrough="${value}" ;;
+		"SYSTEMD_NSPAWN_USER_ARGS") local systemd_nspawn_user_args="${value}" ;;
+		"SYSTEMD_RUN_DEFAULT_ARGS") local systemd_run_default_args="${value}" ;;
+		"SYSTEMD_NSPAWN_DEFAULT_ARGS") local systemd_nspawn_default_args="${value}" ;;
 		esac
 
 	done <"${jail_config_path}"
 
 	echo 'Config loaded!'
 
-	local systemd_run_additional_args=("--unit='jlmkr-${jail_name}'" "--working-directory='./${jail_path}'" "--description='jailmaker ${jail_name}'")
-	local systemd_nspawn_additional_args=("--machine='${jail_name}'" "--directory='${JAIL_ROOTFS_NAME}'")
+	local systemd_run_additional_args=("--unit=jlmkr-${jail_name}" "--working-directory=./${jail_path}")
+	local systemd_nspawn_additional_args=("--machine=${jail_name}" "--directory=${JAIL_ROOTFS_NAME}")
 
 	if [[ "${docker_compatible}" -eq 1 ]]; then
 		# Enable ip forwarding on the host (docker needs it)
@@ -76,11 +80,11 @@ start_jail() {
 		# https://github.com/kinvolk/kube-spawn/pull/328
 		systemd_run_additional_args+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
 		# Add additional flags required for docker
-		systemd_nspawn_additional_args+=(--capability=all "--system-call-filter='add_key keyctl bpf'")
+		systemd_nspawn_additional_args+=(--capability=all "--system-call-filter=add_key keyctl bpf")
 	fi
 
 	if [[ "${gpu_passthrough}" -eq 1 ]]; then
-		systemd_nspawn_additional_args+=("--property=DeviceAllow='char-drm rw'")
+		systemd_nspawn_additional_args+=("--property=DeviceAllow=char-drm rw")
 
 		# Detect intel GPU device and if present add bind flag
 		[[ -d /dev/dri ]] && systemd_nspawn_additional_args+=(--bind=/dev/dri)
@@ -98,15 +102,39 @@ start_jail() {
 		fi
 	fi
 
-	local cmd=(systemd-run "${systemd_run_default_args}" "${systemd_run_additional_args[*]}" --
-		systemd-nspawn "${systemd_nspawn_default_args}" "${systemd_nspawn_additional_args[*]} ${systemd_nspawn_user_args}")
+	local args=()
+
+	# Build the array of arguments
+	local arg
+	# Append each argument, one at a time, to the array
+	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_run_default_args}" | xargs -n 1)
+	# Append each element in systemd_run_additional_args to the args array
+	args+=("${systemd_run_additional_args[@]}")
+	# Add two more args to the array
+	args+=(-- systemd-nspawn)
+	# Append each argument, one at a time, to the array
+	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_nspawn_default_args}" | xargs -n 1)
+	# Append each element in systemd_nspawn_additional_args to the args array
+	args+=("${systemd_nspawn_additional_args[@]}")
+	# Append each argument, one at a time, to the array
+	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_nspawn_user_args}" | xargs -n 1)
+		
+	# Concat all arguments in the array into a single space separated string,
+	# but use %q to output each argument in a format that can be reused as shell input
+	# This escapes special characters for us, which were 'lost' when xargs read the input above
+	# https://ss64.com/bash/printf.html
+	args_string="$(printf '%q ' "${args[@]}")"
 	
 	echo
-	echo "Starting jail with command:"
-	echo "${cmd[*]}"
+	echo "All the arguments to pass to systemd-run:"
+	printf '%s' "${args_string}" | xargs -n 1
+	echo
+	echo "Starting jail with the following command:"
+	echo
+	echo "systemd-run ${args_string}"
 	echo
 
-	eval "${cmd[*]}"
+	printf '%s' "${args_string}" | xargs systemd-run
 	
 	echo
 	echo "Check logging:"
@@ -151,9 +179,9 @@ create_jail() {
 	local lxc_download_script_path="${lxc_dir_path}/lxc-download.sh"
 
 	[[ "$(basename "${SCRIPT_DIR_PATH}")" != 'jailmaker' ]] && {
-		echo "${SCRIPT_NAME} needs to create files."
-		echo "Currently it can't decide if it's safe to create files in:"
-		echo "${SCRIPT_DIR_PATH}"
+		error "${SCRIPT_NAME} needs to create files."
+		error "Currently it can't decide if it's safe to create files in:"
+		error "${SCRIPT_DIR_PATH}"
 		fail "Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} there and try again."
 	}
 
@@ -327,7 +355,7 @@ create_jail() {
 
 	local systemd_run_default_args=(--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133
 		--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=16384 --collect
-		--setenv=SYSTEMD_NSPAWN_LOCK=0)
+		--setenv=SYSTEMD_NSPAWN_LOCK=0 "--description='This systemd-nspawn jail was created with jailmaker'")
 
 	local systemd_nspawn_default_args=(--keep-unit --quiet --boot)
 
