@@ -7,19 +7,31 @@ ABSOLUTE_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 SCRIPT_NAME=$(basename "${ABSOLUTE_SCRIPT_PATH}")
 SCRIPT_DIR_PATH="$(dirname "${ABSOLUTE_SCRIPT_PATH}")"
 
-USAGE="WARNING: EXPERIMENTAL AND WORK IN PROGRESS, USE ONLY FOR TESTING!
-TODO: add version string
-Usage: ./${SCRIPT_NAME} COMMAND [ARG]
+BOLD=$(tput bold)
+RED=$(tput setaf 1)
+YELLOW=$(tput setaf 3)
+NORMAL=$(tput sgr0)
 
-TODO: complete writing usage
-"
+DISCLAIMER="${YELLOW}${BOLD}USING THIS SCRIPT IS AT YOUR OWN RISK!
+IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IX-SYSTEMS.${NORMAL}"
 
 JAILS_DIR_PATH='jails'
 JAIL_ROOTFS_NAME='rootfs'
 JAIL_CONFIG_NAME='config'
 
+USAGE="${DISCLAIMER}
+
+Version: 0.0.0
+
+Usage: ./${SCRIPT_NAME} [COMMAND] [NAME]
+
+Commands:
+  create	Create new jail [NAME] in the ${JAILS_DIR_PATH} dir
+  start		Start jail NAME from the ${JAILS_DIR_PATH} dir
+"
+
 error() {
-	echo -e "${1}" >&2
+	echo -e "${RED}${BOLD}${1}${NORMAL}" >&2
 }
 
 fail() {
@@ -69,15 +81,30 @@ start_jail() {
 
 	echo 'Config loaded!'
 
-	local systemd_run_additional_args=("--unit=jlmkr-${jail_name}" "--working-directory=./${jail_path}")
+	local systemd_run_additional_args=("--unit=jlmkr-${jail_name}" "--working-directory=./${jail_path}" "--description=My nspawn jail ${jail_name} [created with jailmaker]")
 	local systemd_nspawn_additional_args=("--machine=${jail_name}" "--directory=${JAIL_ROOTFS_NAME}")
 
 	if [[ "${docker_compatible}" -eq 1 ]]; then
 		# Enable ip forwarding on the host (docker needs it)
 		echo 1 >/proc/sys/net/ipv4/ip_forward
+		
 		# To properly run docker inside the jail, we need to lift restrictions
 		# Without DevicePolicy=auto images with device nodes may not be pulled
-		# https://github.com/kinvolk/kube-spawn/pull/328
+		# For example docker pull ljishen/sysbench would fail
+		#
+		# Issue: https://github.com/moby/moby/issues/35245
+		# Workaround: https://github.com/kinvolk/kube-spawn/pull/328
+		# However, it seems like the DeviceAllow= workaround may break in
+		# a future Debian release with systemd version 250 or higher
+		# https://github.com/systemd/systemd/issues/21987
+		#
+		# The systemd-nspawn manual explicitly mentions:
+		# Device nodes may not be created
+		# https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
+		#
+		# Fortunately I didn't encounter many images with device nodes...
+		#
+		# Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
 		systemd_run_additional_args+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
 		# Add additional flags required for docker
 		systemd_nspawn_additional_args+=(--capability=all "--system-call-filter=add_key keyctl bpf")
@@ -118,13 +145,13 @@ start_jail() {
 	args+=("${systemd_nspawn_additional_args[@]}")
 	# Append each argument, one at a time, to the array
 	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_nspawn_user_args}" | xargs -n 1)
-		
+
 	# Concat all arguments in the array into a single space separated string,
 	# but use %q to output each argument in a format that can be reused as shell input
 	# This escapes special characters for us, which were 'lost' when xargs read the input above
 	# https://ss64.com/bash/printf.html
 	args_string="$(printf '%q ' "${args[@]}")"
-	
+
 	echo
 	echo "All the arguments to pass to systemd-run:"
 	printf '%s' "${args_string}" | xargs -n 1
@@ -134,8 +161,12 @@ start_jail() {
 	echo "systemd-run ${args_string}"
 	echo
 
-	printf '%s' "${args_string}" | xargs systemd-run
-	
+	printf '%s' "${args_string}" | xargs systemd-run || {
+		echo
+		error 'Failed to start the jail...'
+		fail "Please check and fix the config file with \"nano ${jail_config_path}\"."
+	}
+
 	echo
 	echo "Check logging:"
 	echo "journalctl -u jlmkr-${jail_name}"
@@ -170,8 +201,10 @@ validate_download_script() {
 }
 
 create_jail() {
-	# TODO: show disclaimer
+	echo -e "${DISCLAIMER}"
+	echo
 
+	local name_from_arg="${1}"
 	local arch
 	arch="$(dpkg --print-architecture)"
 	local lxc_dir_path='.lxc'
@@ -188,7 +221,9 @@ create_jail() {
 	local reply
 
 	if [[ $(findmnt --target . --output TARGET --noheadings --first-only) != /mnt/* ]]; then
-		echo "${SCRIPT_NAME} should be on a pool mounted under /mnt (it currently isn't)."
+		echo "${YELLOW}${BOLD}WARNING: BEWARE OF DATA LOSS${NORMAL}"
+		echo
+		echo "${SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't)."
 		echo "Storing it on the boot-pool means losing all jails when updating TrueNAS."
 		echo "If you continue, jails will be stored under:"
 		echo "${SCRIPT_DIR_PATH}"
@@ -222,34 +257,38 @@ create_jail() {
 
 	stat_chmod 700 "${lxc_download_script_path}"
 
-	local distro release
+	local distro='debian' release='bullseye'
 
 	read -p "Install the recommended distro (Debian 11)? [Y/n] " -n 1 -r reply && echo
-	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
-		distro='debian'
-		release='bullseye'
-	else
+	if ! [[ "${reply}" =~ ^([Yy]|)$ ]]; then
 		echo
-		echo "ADVANCED USAGE"
+		echo "${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}"
+		echo
 		echo "You may now choose from a list which distro to install."
-		echo "Not all of them will work with ${SCRIPT_NAME} (these images are made for LXC)."
+		echo "But not all of them will work with ${SCRIPT_NAME} since these images are made for LXC."
 		echo "Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux)."
 		echo "Others (Alpine, Devuan, Void Linux) probably won't."
 		echo
 		read -p "Press any key to continue: " -n 1 -r reply && echo
+		echo
 		lxc_cache_path=${lxc_cache_path} "${lxc_download_script_path}" --list --arch="${arch}" || :
+		echo
 		echo "Choose from the DIST column."
+		echo
 		read -e -r -p "Distribution: " distro && echo
 		echo "Choose from the RELEASE column (or ARCH if RELEASE is empty)."
-		read -e -r -p "Release: " release && echo
+		echo
+		read -e -r -p "Release: " release
 	fi
-
+	echo
 	local jail_name jail_path
 
 	while true; do
-		read -e -r -p "Enter jail name: " jail_name && echo
+		read -e -r -p "Enter jail name: " -i "${name_from_arg}" jail_name && echo
 		if ! [[ "${jail_name}" =~ ^[.a-zA-Z0-9-]{1,64}$ && "${jail_name}" != '.'* && "${jail_name}" != *'.' && "${jail_name}" != *'..'* ]]; then
-			cat <<-'EOF'
+			cat <<-EOF
+				${YELLOW}${BOLD}WARNING: INVALID NAME${NORMAL}
+
 				A valid name consists of:
 				- allowed characters (alphanumeric, dash, dot)
 				- no leading or trailing dots
@@ -276,35 +315,46 @@ create_jail() {
 
 	local docker_compatible gpu_passthrough systemd_nspawn_user_args
 
-	echo "${SCRIPT_NAME} will not install docker for you."
-	echo "But it can configure the jail with the capabilities required to run docker."
-	echo "You can turn docker_compatible mode on/off post-install."
+	echo "Docker won't be installed by ${SCRIPT_NAME}."
+	echo "But it can setup the jail with the capabilities required to run docker."
+	echo "You can turn DOCKER_COMPATIBLE mode on/off post-install."
 	echo
 	read -p "Make jail docker compatible right now? [y/N] " -n 1 -r reply && echo
 	# Enter accepts default (no)
 	if ! [[ "${reply}" =~ ^[Yy]$ ]]; then docker_compatible=0; else docker_compatible=1; fi
-
+	echo
 	read -p "Give access to the GPU inside the jail? [y/N] " -n 1 -r reply && echo
 	# Enter accepts default (no)
 	if ! [[ "${reply}" =~ ^[Yy]$ ]]; then gpu_passthrough=0; else gpu_passthrough=1; fi
-
-	# TODO: ask to show nspawn manual
 	echo
-	echo "You may pass additional systemd-nspawn flags."
-	echo "For example to mount directories inside the jail you may add:"
-	echo "--bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory"
+	echo "${YELLOW}${BOLD}WARNING: CHECK SYNTAX${NORMAL}"
 	echo
-	echo "Double check the syntax:"
-	echo "https://manpages.debian.org/bullseye/systemd-container/systemd-nspawn.1.en.html"
+	echo "You may pass additional flags to systemd-nspawn."
 	echo "With incorrect flags the jail may not start."
 	echo "It's possible to correct/add/remove flags post-install."
 	echo
-	read -e -r -p "Additional flags: " systemd_nspawn_user_args && echo
-	# Backslashes and colons need to be escaped for systemd-nspawn by the user:
+	read -p "Show the man page for systemd-nspawn? [y/N] " -n 1 -r reply && echo
+
+	# Enter accepts default (no)
+	if [[ "${reply}" =~ ^[Yy]$ ]]; then
+		man systemd-nspawn
+	else
+		echo
+		echo "You may read the systemd-nspawn manual online:"
+		echo "https://manpages.debian.org/${distro}/systemd-container/systemd-nspawn.1.en.html"
+	fi
+
+	# Backslashes and colons need to be escaped in bind mount options:
 	# e.g. to bind mount a file called:
 	# weird chars :?\"
 	# the corresponding command would be:
 	# --bind-ro='/mnt/data/weird chars \:?\\"'
+
+	echo
+	echo "For example to mount directories inside the jail you may add:"
+	echo "--bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory"
+	echo
+	read -e -r -p "Additional flags: " systemd_nspawn_user_args && echo
 
 	# Create directory for rootfs
 	JAIL_ROOTFS_PATH="${jail_path}/${JAIL_ROOTFS_NAME}"
@@ -315,14 +365,38 @@ create_jail() {
 	# but we don't need it so we will remove it later
 	touch "${jail_config_path}"
 
-	echo
 	LXC_CACHE_PATH=${lxc_cache_path} "${lxc_download_script_path}" \
 		--name="${jail_name}" --path="${jail_path}" --rootfs="${JAIL_ROOTFS_PATH}" \
 		--arch="${arch}" --dist="${distro}" --release="${release}" ||
 		fail "Aborted creating rootfs..."
 	echo
 
+	# Assuming the name of your jail is "myjail"
+	# and "machinectl shell myjail" doesn't work
+	# Try:
+	#
+	# Stop the jail with:
+	# machinectl stop myjail
+	# And start a shell inside the jail without the --boot option:
+	# systemd-nspawn -q -D jails/myjail/rootfs /bin/sh
+	# Then set a root password with:
+	# In case of amazonlinux you may need to run:
+	# yum update -y && yum install -y passwd
+	# passwd
+	# exit
+	# Then you may login from the host via:
+	# machinectl login myjail
+	#
+	# You could also enable SSH inside the jail to login
+	#
+	# Or if that doesn't work (e.g. for alpine) get a shell via:
+	# nsenter -t $(machinectl show myjail -p Leader --value) -a /bin/sh -l
+	# But alpine jails made with jailmaker have other issues
+	# They don't shutdown cleanly via systemctl and machinectl...
+
 	if [[ "$(basename "$(readlink -f "${JAIL_ROOTFS_PATH}/sbin/init")")" != systemd ]]; then
+		echo "${YELLOW}${BOLD}WARNING: DISTRO NOT SUPPORTED${NORMAL}"
+		echo
 		echo "Chosen distro appears not to use systemd..."
 		echo
 		echo "You probably won't get a shell with:"
@@ -330,16 +404,18 @@ create_jail() {
 		echo
 		echo "You may get a shell with this command:"
 		# About nsenter:
-		# https://github.com/systemd/systemd/issues/12785#issuecomment-503019081
-		# https://github.com/systemd/systemd/issues/3144
 		# shellcheck disable=SC2016
 		echo 'nsenter -t $(machinectl show '"${jail_name}"' -p Leader --value) -a /bin/sh -l'
 		echo
-		echo "Using this distro with ${SCRIPT_NAME} is not recommended."
+		echo 'Read about the downsides of nsenter:'
+		echo 'https://github.com/systemd/systemd/issues/12785#issuecomment-503019081'
+		echo
+		echo "${BOLD}Using this distro with ${SCRIPT_NAME} is NOT recommended.${NORMAL}"
 		echo
 		read -p "Abort creating jail? [Y/n] " -n 1 -r reply && echo
 		# Enter accepts default (yes)
 		[[ "${reply}" =~ ^([Yy]|)$ ]] && exit
+		echo
 	fi
 
 	# Config which systemd handles for us
@@ -349,13 +425,21 @@ create_jail() {
 	# https://github.com/systemd/systemd/issues/852
 	printf 'pts/%d\n' $(seq 0 10) >"${JAIL_ROOTFS_PATH}/etc/securetty"
 
-	# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file
+	# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
 	# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
-	# TODO: also compare settings for docker: https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
+	# Use TasksMax=infinity since this is what docker does:
+	# https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
+
+	# Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
+	# Would give "directory tree currently busy" error and I'd have to run
+	# `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
+	# Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
+	# with the same name anyway: as long as we're starting jails using this script,
+	# it won't be possible to start the same jail twice
 
 	local systemd_run_default_args=(--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133
-		--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=16384 --collect
-		--setenv=SYSTEMD_NSPAWN_LOCK=0 "--description='This systemd-nspawn jail was created with jailmaker'")
+		--property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=infinity --collect
+		--setenv=SYSTEMD_NSPAWN_LOCK=0)
 
 	local systemd_nspawn_default_args=(--keep-unit --quiet --boot)
 
@@ -380,6 +464,7 @@ create_jail() {
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
 		start_jail "${jail_name}"
 	else
+		echo
 		echo 'Skipped starting jail.'
 	fi
 }
@@ -388,35 +473,23 @@ create_jail() {
 # COMMAND LINE HANDLING
 #######################
 
-# TODO document
-# machinectl shell
-# If that doesn't work try
-# machinectl login
-# But since there's no root password set, that won't work either
-# So you'd have to get a shell via
-# nsenter -t $(machinectl show alpine -p Leader --value) -a /bin/sh -l
-# Then set a root password via passwd
-# Then you may login via
-# machinectl login
-# TODO: recommend ssh ;)
-# TODO: create a jlmkr shell command to try the above in case machinectl shell doesn't work
-# TODO: document journalctl -u jlmkr-jailname
-
 case "${1-""}" in
 
 '')
 	read -p "Create a new jail? [Y/n] " -n 1 -r reply && echo
+	echo
 	# Enter accepts default (yes)
 	# https://stackoverflow.com/a/1885534
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
-		create_jail
+		create_jail ""
 	else
+
 		echo "${USAGE}"
 	fi
 	;;
 
 create)
-	create_jail
+	create_jail "${2-""}"
 	;;
 
 start)
