@@ -452,7 +452,7 @@ create_jail() {
 		echo "SYSTEMD_NSPAWN_DEFAULT_ARGS=${systemd_nspawn_default_args[*]}"
 	} >"${jail_config_path}"
 
-	chmod 700 "${jail_config_path}"
+	chmod 600 "${jail_config_path}"
 
 	# Remove the cleanup trap on exit
 	trap - EXIT
