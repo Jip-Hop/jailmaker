@@ -39,6 +39,7 @@ fail() {
 	error "${1}" && exit 1
 }
 
+[[ -z "${BASH_VERSINFO+x}" ]] && fail "This script must run in bash..."
 [[ $UID -ne 0 ]] && echo "${USAGE}" && fail "Run this script as root..."
 cd "${SCRIPT_DIR_PATH}" || fail "Could not change working directory to ${SCRIPT_DIR_PATH}..."
 
