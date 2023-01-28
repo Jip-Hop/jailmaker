@@ -32,7 +32,7 @@ The `jlmkr.sh` script (and the jails + config it creates) are now stored on the 
 
 ## Create Jail
 
-Creating a jail is interactive. You'll be presented with questions which guide you through the process.
+Creating a jail is interactive. You'll be presented with questions which guide you through the process. The rootfs image it downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC, but we can use them too (although not all of them).
 
 ```shell
 ./jlmkr.sh create myjail
