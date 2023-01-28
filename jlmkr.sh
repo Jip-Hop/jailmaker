@@ -7,10 +7,11 @@ ABSOLUTE_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 SCRIPT_NAME=$(basename "${ABSOLUTE_SCRIPT_PATH}")
 SCRIPT_DIR_PATH="$(dirname "${ABSOLUTE_SCRIPT_PATH}")"
 
-BOLD=$(tput bold)
-RED=$(tput setaf 1)
-YELLOW=$(tput setaf 3)
-NORMAL=$(tput sgr0)
+# Only set a color if we have an interactive tty
+[[ -t 1 ]] && BOLD=$(tput bold) || BOLD=
+[[ -t 1 ]] && RED=$(tput setaf 1) || RED=
+[[ -t 1 ]] && YELLOW=$(tput setaf 3) || YELLOW=
+[[ -t 1 ]] && NORMAL=$(tput sgr0) || NORMAL=
 
 DISCLAIMER="${YELLOW}${BOLD}USING THIS SCRIPT IS AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.${NORMAL}"
@@ -39,6 +40,7 @@ fail() {
 }
 
 [[ $UID -ne 0 ]] && echo "${USAGE}" && fail "Run this script as root..."
+cd "${SCRIPT_DIR_PATH}" || fail "Could not change working directory to ${SCRIPT_DIR_PATH}..."
 
 trace() {
 	# https://unix.stackexchange.com/a/504829/477308
@@ -108,6 +110,29 @@ start_jail() {
 		systemd_run_additional_args+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
 		# Add additional flags required for docker
 		systemd_nspawn_additional_args+=(--capability=all "--system-call-filter=add_key keyctl bpf")
+
+		# # TODO: don't process these systemd_nspawn_user_args twice,
+		# # it is done again below
+		# while read -r arg; do
+		# 	# TODO: does --network-macvlan also need this?
+		# 	if [[ "${arg}" == "--network-bridge=*" ]]; then
+		# 		echo "Enable br_netfilter, docker requires it when jail is connected to bridge."
+		# 		# TODO: figure out what the consequence is when not using br_netfilter
+		# 		# Can these warnings in `docker info` be safely ignored?
+		# 		# WARNING: bridge-nf-call-iptables is disabled
+		# 		# WARNING: bridge-nf-call-ip6tables is disabled
+		# 		# https://unix.stackexchange.com/q/720105/477308
+		# 		# https://github.com/moby/moby/issues/24809
+		# 		# https://docs.oracle.com/en/operating-systems/oracle-linux/docker/docker-KnownIssues.html#docker-issues
+		#		# https://wiki.libvirt.org/page/Net.bridge.bridge-nf-call_and_sysctl.conf
+		#		# https://serverfault.com/questions/963759/docker-breaks-libvirt-bridge-network
+		# 		modprobe br_netfilter
+		# 		sysctl net.bridge.bridge-nf-call-iptables=1
+		# 		sysctl net.bridge.bridge-nf-call-ip6tables=1
+
+		# 		break
+		# 	fi
+		# done < <(printf '%s' "${systemd_nspawn_user_args}" | xargs -n 1)
 	fi
 
 	if [[ "${gpu_passthrough}" -eq 1 ]]; then
@@ -231,8 +256,6 @@ create_jail() {
 		# Enter accepts default (no)
 		! [[ "${reply}" =~ ^[Yy]$ ]] && exit
 	fi
-
-	cd "${SCRIPT_DIR_PATH}" || fail "Could not change working directory to ${SCRIPT_DIR_PATH}..."
 
 	# Set appropriate permissions (if not already set) for this file, since it's executed as root
 	stat_chmod 700 "${SCRIPT_NAME}"
