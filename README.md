@@ -86,9 +86,13 @@ By default the jail will have full access to the host network. No further setup 
 
 See [Advanced Networking](./NETWORKING.md) for more.
 
+## Docker
+
+Jailmaker won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
+
 ## Comparison
 
-TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, docker (on the host).
+TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Docker (on the host).
 
 ## References
 
@@ -96,3 +100,4 @@ TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, doc
 - [machinectl](https://manpages.debian.org/bullseye/systemd-container/machinectl.1.en.html)
 - [systemd-run](https://manpages.debian.org/bullseye/systemd/systemd-run.1.en.html)
 - [Run docker in systemd-nspawn](https://wiki.archlinux.org/title/systemd-nspawn#Run_docker_in_systemd-nspawn)
+- [The original Jailmaker gist](https://gist.github.com/Jip-Hop/4704ba4aa87c99f342b2846ed7885a5d)
