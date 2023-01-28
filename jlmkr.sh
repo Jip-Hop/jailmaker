@@ -424,6 +424,42 @@ create_jail() {
 	# https://github.com/systemd/systemd/issues/852
 	printf 'pts/%d\n' $(seq 0 10) >"${JAIL_ROOTFS_PATH}/etc/securetty"
 
+	local network_dir_path="${JAIL_ROOTFS_PATH}/etc/systemd/network/"
+
+	# Check destination directory exists
+	if [[ -d "${network_dir_path}" ]]; then
+		local default_host0_network_file="${JAIL_ROOTFS_PATH}/lib/systemd/network/80-container-host0.network"
+
+		# Check if default host0 network file exists
+		if [[ -f "${default_host0_network_file}" ]]; then
+			local override_network_file="${network_dir_path}/80-container-host0.network"
+
+			# Override the default 80-container-host0.network file (by using the same name)
+			# This config applies when using the --network-bridge option of systemd-nspawn
+			# Disable LinkLocalAddressing or else the container won't get IP address via DHCP
+			sed 's/LinkLocalAddressing=yes/LinkLocalAddressing=no/g' <"${default_host0_network_file}" >"${override_network_file}"
+			# Enable DHCP only for ipv4 else systemd-networkd will complain that LinkLocalAddressing is disabled
+			sed -i 's/DHCP=yes/DHCP=ipv4/g' "${override_network_file}"
+		fi
+
+		# Setup DHCP for macvlan network interfaces
+		# This config applies when using the --network-macvlan option of systemd-nspawn
+		# https://www.debian.org/doc/manuals/debian-reference/ch05.en.html#_the_modern_network_configuration_without_gui
+		cat <<-'EOF' >"${network_dir_path}/mv-dhcp.network"
+			[Match]
+			Virtualization=container
+			Name=mv-*
+
+			[Network]
+			DHCP=ipv4
+			LinkLocalAddressing=no
+
+			[DHCPv4]
+			UseDNS=true
+			UseTimezone=true
+		EOF
+	fi
+
 	# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
 	# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
 	# Use TasksMax=infinity since this is what docker does:
