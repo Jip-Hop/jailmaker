@@ -87,7 +87,7 @@ start_jail() {
 	if [[ "${docker_compatible}" -eq 1 ]]; then
 		# Enable ip forwarding on the host (docker needs it)
 		echo 1 >/proc/sys/net/ipv4/ip_forward
-		
+
 		# To properly run docker inside the jail, we need to lift restrictions
 		# Without DevicePolicy=auto images with device nodes may not be pulled
 		# For example docker pull ljishen/sysbench would fail
@@ -249,8 +249,7 @@ create_jail() {
 
 	# Fetch the lxc download script if not present locally (or hash doesn't match)
 	if ! validate_download_script "${lxc_download_script_path}"; then
-		curl -fSL
-		https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in -o "${lxc_download_script_path}"
+		curl -fSL https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in -o "${lxc_download_script_path}"
 		# Validate after download to prevent executing arbitrary code as root
 		validate_download_script "${lxc_download_script_path}" || fail 'Abort! Downloaded script has unexpected contents.'
 	fi
