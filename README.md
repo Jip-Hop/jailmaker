@@ -8,7 +8,7 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 The systemd-container package may be removed from a future release of TrueNAS SCALE without warning ([unless it gets integrated](https://ixsystems.atlassian.net/browse/NAS-119787)). If that happens, you may be unable to start jails create with `jlmkr.sh`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes that](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
 
-**THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE**
+**THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE.**
 
 ## Summary
 
