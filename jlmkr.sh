@@ -163,18 +163,20 @@ start_jail() {
 
 	# Build the array of arguments
 	local arg
+
+	# Read each argument from a string with null character as delimiter
 	# Append each argument, one at a time, to the array
-	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_run_default_args}" | xargs -n 1)
+	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_run_default_args}")
 	# Append each element in systemd_run_additional_args to the args array
 	args+=("${systemd_run_additional_args[@]}")
 	# Add two more args to the array
 	args+=(-- systemd-nspawn)
 	# Append each argument, one at a time, to the array
-	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_nspawn_default_args}" | xargs -n 1)
+	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_nspawn_default_args}")
 	# Append each element in systemd_nspawn_additional_args to the args array
 	args+=("${systemd_nspawn_additional_args[@]}")
 	# Append each argument, one at a time, to the array
-	while read -r arg; do args+=("${arg}"); done < <(printf '%s' "${systemd_nspawn_user_args}" | xargs -n 1)
+	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_nspawn_user_args}")
 
 	# Concat all arguments in the array into a single space separated string,
 	# but use %q to output each argument in a format that can be reused as shell input
