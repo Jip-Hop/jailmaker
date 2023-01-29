@@ -94,18 +94,22 @@ start_jail() {
 		# To properly run docker inside the jail, we need to lift restrictions
 		# Without DevicePolicy=auto images with device nodes may not be pulled
 		# For example docker pull ljishen/sysbench would fail
+		# Fortunately I didn't encounter many images with device nodes...
 		#
 		# Issue: https://github.com/moby/moby/issues/35245
-		# Workaround: https://github.com/kinvolk/kube-spawn/pull/328
-		# However, it seems like the DeviceAllow= workaround may break in
-		# a future Debian release with systemd version 250 or higher
-		# https://github.com/systemd/systemd/issues/21987
 		#
 		# The systemd-nspawn manual explicitly mentions:
 		# Device nodes may not be created
 		# https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
 		#
-		# Fortunately I didn't encounter many images with device nodes...
+		# Workaround: https://github.com/kinvolk/kube-spawn/pull/328
+		#
+		# However, it seems like the DeviceAllow= workaround may break in
+		# a future Debian release with systemd version 250 or higher
+		# https://github.com/systemd/systemd/issues/21987
+		#
+		# As of 29-1-2023 it still works with debian bookworm (nightly) and sid
+		# using the latest systemd version 252.4-2 so I think we're good!
 		#
 		# Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
 		systemd_run_additional_args+=(--setenv=SYSTEMD_SECCOMP=0 --property=DevicePolicy=auto)
@@ -253,6 +257,7 @@ create_jail() {
 		echo "Storing it on the boot-pool means losing all jails when updating TrueNAS."
 		echo "If you continue, jails will be stored under:"
 		echo "${SCRIPT_DIR_PATH}"
+		echo
 		read -p "Do you wish to ignore this warning and continue? [y/N] " -n 1 -r reply && echo
 		# Enter accepts default (no)
 		! [[ "${reply}" =~ ^[Yy]$ ]] && exit
