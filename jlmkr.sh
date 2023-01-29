@@ -31,21 +31,32 @@ Commands:
   start		Start jail NAME from the ${JAILS_DIR_PATH} dir
 "
 
+print() {
+	printf '%s\n' "${1-}"
+}
+
 error() {
-	echo -e "${RED}${BOLD}${1}${NORMAL}" >&2
+	print "${RED}${BOLD}${1}${NORMAL}" >&2
 }
 
 fail() {
 	error "${1}" && exit 1
 }
 
-[[ -z "${BASH_VERSINFO+x}" ]] && fail "This script must run in bash..."
-[[ $UID -ne 0 ]] && echo "${USAGE}" && fail "Run this script as root..."
+stat_chmod() {
+	# Only run chmod if mode is different from current mode
+	if [[ "$(stat -c%a "${2}")" -ne "${1}" ]]; then chmod "${1}" "${2}"; fi
+}
+
+[[ -z "${BASH_VERSINFO+x}" ]] && fail 'This script must run in bash...'
+[[ $UID -ne 0 ]] && print "${USAGE}" && fail 'Run this script as root...'
 cd "${SCRIPT_DIR_PATH}" || fail "Could not change working directory to ${SCRIPT_DIR_PATH}..."
+# Set appropriate permissions (if not already set) for this file, since it's executed as root
+stat_chmod 700 "${SCRIPT_NAME}"
 
 trace() {
 	# https://unix.stackexchange.com/a/504829/477308
-	echo 'Error occurred:'
+	print 'Error occurred:'
 	awk 'NR>L-4 && NR<L+4 { printf "%-5d%3s%s\n",NR,(NR==L?">>>":""),$0 }' L="${1}" "${ABSOLUTE_SCRIPT_PATH}"
 }
 
@@ -57,14 +68,14 @@ trap 'trace $LINENO' ERR
 #####################
 
 start_jail() {
-	[[ -z "${1}" ]] && fail "Please specify the name of the jail to start."
+	[[ -z "${1}" ]] && fail 'Please specify the name of the jail to start.'
 	local jail_name="${1}"
 	local jail_path="${JAILS_DIR_PATH}/${jail_name}"
 	local jail_config_path="${jail_path}/${JAIL_CONFIG_NAME}"
 
-	! [[ -f "${jail_config_path}" ]] && fail "ERROR: Couldn't find: ${jail_config_path}."
+	! [[ -f "${jail_config_path}" ]] && fail "ERROR: Could not find: ${jail_config_path}."
 
-	echo 'Loading config...'
+	print 'Loading config...'
 
 	local key value
 
@@ -82,14 +93,14 @@ start_jail() {
 
 	done <"${jail_config_path}"
 
-	echo 'Config loaded!'
+	print 'Config loaded!'
 
 	local systemd_run_additional_args=("--unit=jlmkr-${jail_name}" "--working-directory=./${jail_path}" "--description=My nspawn jail ${jail_name} [created with jailmaker]")
 	local systemd_nspawn_additional_args=("--machine=${jail_name}" "--directory=${JAIL_ROOTFS_NAME}")
 
 	if [[ "${docker_compatible}" -eq 1 ]]; then
 		# Enable ip forwarding on the host (docker needs it)
-		echo 1 >/proc/sys/net/ipv4/ip_forward
+		printf 1 >/proc/sys/net/ipv4/ip_forward
 
 		# To properly run docker inside the jail, we need to lift restrictions
 		# Without DevicePolicy=auto images with device nodes may not be pulled
@@ -121,7 +132,7 @@ start_jail() {
 		# while read -r arg; do
 		# 	# TODO: does --network-macvlan also need this?
 		# 	if [[ "${arg}" == "--network-bridge=*" ]]; then
-		# 		echo "Enable br_netfilter, docker requires it when jail is connected to bridge."
+		# 		print 'Enable br_netfilter, docker requires it when jail is connected to bridge.'
 		# 		# TODO: figure out what the consequence is when not using br_netfilter
 		# 		# Can these warnings in `docker info` be safely ignored?
 		# 		# WARNING: bridge-nf-call-iptables is disabled
@@ -166,51 +177,51 @@ start_jail() {
 
 	# Read each argument from a string with null character as delimiter
 	# Append each argument, one at a time, to the array
-	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_run_default_args}")
+
+	while IFS= read -rd '' arg; do [[ -n "${arg}" ]] && args+=("${arg}"); done < <(printf %s "${systemd_run_default_args}" | xargs printf '%s\0')
 	# Append each element in systemd_run_additional_args to the args array
 	args+=("${systemd_run_additional_args[@]}")
 	# Add two more args to the array
 	args+=(-- systemd-nspawn)
 	# Append each argument, one at a time, to the array
-	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_nspawn_default_args}")
+	while IFS= read -rd '' arg; do [[ -n "${arg}" ]] && args+=("${arg}"); done < <(printf %s "${systemd_nspawn_default_args}" | xargs printf '%s\0')
 	# Append each element in systemd_nspawn_additional_args to the args array
 	args+=("${systemd_nspawn_additional_args[@]}")
 	# Append each argument, one at a time, to the array
-	while IFS= read -rd '' arg; do args+=("${arg}"); done < <(xargs printf '%s\0' <<<"${systemd_nspawn_user_args}")
-
+	while IFS= read -rd '' arg; do [[ -n "${arg}" ]] && args+=("${arg}"); done < <(printf %s "${systemd_nspawn_user_args}" | xargs printf '%s\0')
 	# Concat all arguments in the array into a single space separated string,
 	# but use %q to output each argument in a format that can be reused as shell input
 	# This escapes special characters for us, which were 'lost' when xargs read the input above
 	# https://ss64.com/bash/printf.html
 	args_string="$(printf '%q ' "${args[@]}")"
 
-	echo
-	echo "All the arguments to pass to systemd-run:"
+	print
+	print 'All the arguments to pass to systemd-run:'
 	printf '%s' "${args_string}" | xargs -n 1
-	echo
-	echo "Starting jail with the following command:"
-	echo
-	echo "systemd-run ${args_string}"
-	echo
+	print
+	print 'Starting jail with the following command:'
+	print
+	print "systemd-run ${args_string}"
+	print
 
 	printf '%s' "${args_string}" | xargs systemd-run || {
-		echo
+		print
 		error 'Failed to start the jail...'
-		fail "Please check and fix the config file with \"nano ${jail_config_path}\"."
+		fail 'Please check and fix the config file with "nano '"${jail_config_path}"'".'
 	}
 
-	echo
-	echo "Check logging:"
-	echo "journalctl -u jlmkr-${jail_name}"
-	echo
-	echo "Check status:"
-	echo "systemctl status jlmkr-${jail_name}"
-	echo
-	echo "Stop the jail:"
-	echo "machinectl stop ${jail_name}"
-	echo
-	echo "Get a shell:"
-	echo "machinectl shell ${jail_name}"
+	print
+	print 'Check logging:'
+	print "journalctl -u jlmkr-${jail_name}"
+	print
+	print 'Check status:'
+	print "systemctl status jlmkr-${jail_name}"
+	print
+	print 'Stop the jail:'
+	print "machinectl stop ${jail_name}"
+	print
+	print 'Get a shell:'
+	print "machinectl shell ${jail_name}"
 }
 
 ######################
@@ -220,21 +231,16 @@ start_jail() {
 cleanup() {
 	# Remove the jail_path if it's a directory
 	local jail_path="${1}"
-	[[ -d "${jail_path}" ]] && echo -e "\n\nCleaning up: ${jail_path}\n" && rm -rf "${jail_path}"
-}
-
-stat_chmod() {
-	# Only run chmod if mode is different from current mode
-	if [[ "$(stat -c%a "${2}")" -ne "${1}" ]]; then chmod "${1}" "${2}"; fi
+	[[ -d "${jail_path}" ]] && print && print "Cleaning up: ${jail_path}" && rm -rf "${jail_path}"
 }
 
 validate_download_script() {
-	echo "6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4  ${1}" | sha256sum --check >/dev/null
+	print "6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4  ${1}" | sha256sum --check >/dev/null
 }
 
 create_jail() {
-	echo -e "${DISCLAIMER}"
-	echo
+	print "${DISCLAIMER}"
+	print
 
 	local name_from_arg="${1}"
 	local arch
@@ -245,7 +251,7 @@ create_jail() {
 
 	[[ "$(basename "${SCRIPT_DIR_PATH}")" != 'jailmaker' ]] && {
 		error "${SCRIPT_NAME} needs to create files."
-		error "Currently it can't decide if it's safe to create files in:"
+		error 'Currently it can not decide if it is safe to create files in:'
 		error "${SCRIPT_DIR_PATH}"
 		fail "Please create a dedicated directory called 'jailmaker', store ${SCRIPT_NAME} there and try again."
 	}
@@ -253,20 +259,17 @@ create_jail() {
 	local reply
 
 	if [[ $(findmnt --target . --output TARGET --noheadings --first-only) != /mnt/* ]]; then
-		echo "${YELLOW}${BOLD}WARNING: BEWARE OF DATA LOSS${NORMAL}"
-		echo
-		echo "${SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't)."
-		echo "Storing it on the boot-pool means losing all jails when updating TrueNAS."
-		echo "If you continue, jails will be stored under:"
-		echo "${SCRIPT_DIR_PATH}"
-		echo
-		read -p "Do you wish to ignore this warning and continue? [y/N] " -n 1 -r reply && echo
+		print "${YELLOW}${BOLD}WARNING: BEWARE OF DATA LOSS${NORMAL}"
+		print
+		print "${SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't)."
+		print 'Storing it on the boot-pool means losing all jails when updating TrueNAS.'
+		print 'If you continue, jails will be stored under:'
+		print "${SCRIPT_DIR_PATH}"
+		print
+		read -p "Do you wish to ignore this warning and continue? [y/N] " -n 1 -r reply && print
 		# Enter accepts default (no)
 		! [[ "${reply}" =~ ^[Yy]$ ]] && exit
 	fi
-
-	# Set appropriate permissions (if not already set) for this file, since it's executed as root
-	stat_chmod 700 "${SCRIPT_NAME}"
 
 	# Create the lxc dirs if nonexistent
 	mkdir -p "${lxc_dir_path}"
@@ -289,32 +292,32 @@ create_jail() {
 
 	local distro='debian' release='bullseye'
 
-	read -p "Install the recommended distro (Debian 11)? [Y/n] " -n 1 -r reply && echo
+	read -p "Install the recommended distro (Debian 11)? [Y/n] " -n 1 -r reply && print
 	if ! [[ "${reply}" =~ ^([Yy]|)$ ]]; then
-		echo
-		echo "${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}"
-		echo
-		echo "You may now choose from a list which distro to install."
-		echo "But not all of them will work with ${SCRIPT_NAME} since these images are made for LXC."
-		echo "Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux)."
-		echo "Others (Alpine, Devuan, Void Linux) probably won't."
-		echo
-		read -p "Press any key to continue: " -n 1 -r reply && echo
-		echo
+		print
+		print "${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}"
+		print
+		print 'You may now choose from a list which distro to install.'
+		print "But not all of them will work with ${SCRIPT_NAME} since these images are made for LXC."
+		print 'Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).'
+		print 'Others (Alpine, Devuan, Void Linux) probably will not.'
+		print
+		read -p "Press any key to continue: " -n 1 -r reply && print
+		print
 		lxc_cache_path=${lxc_cache_path} "${lxc_download_script_path}" --list --arch="${arch}" || :
-		echo
-		echo "Choose from the DIST column."
-		echo
-		read -e -r -p "Distribution: " distro && echo
-		echo "Choose from the RELEASE column (or ARCH if RELEASE is empty)."
-		echo
+		print
+		print 'Choose from the DIST column.'
+		print
+		read -e -r -p "Distribution: " distro && print
+		print 'Choose from the RELEASE column (or ARCH if RELEASE is empty).'
+		print
 		read -e -r -p "Release: " release
 	fi
-	echo
+	print
 	local jail_name jail_path
 
 	while true; do
-		read -e -r -p "Enter jail name: " -i "${name_from_arg}" jail_name && echo
+		read -e -r -p "Enter jail name: " -i "${name_from_arg}" jail_name && print
 		if ! [[ "${jail_name}" =~ ^[.a-zA-Z0-9-]{1,64}$ && "${jail_name}" != '.'* && "${jail_name}" != *'.' && "${jail_name}" != *'..'* ]]; then
 			cat <<-EOF
 				${YELLOW}${BOLD}WARNING: INVALID NAME${NORMAL}
@@ -330,8 +333,8 @@ create_jail() {
 			jail_path="${JAILS_DIR_PATH}/${jail_name}"
 
 			if [[ -e "${jail_path}" ]]; then
-				echo "A jail with this name already exists."
-				echo
+				print 'A jail with this name already exists.'
+				print
 			else
 				# Accept the name
 				break
@@ -345,33 +348,33 @@ create_jail() {
 
 	local docker_compatible gpu_passthrough systemd_nspawn_user_args
 
-	echo "Docker won't be installed by ${SCRIPT_NAME}."
-	echo "But it can setup the jail with the capabilities required to run docker."
-	echo "You can turn DOCKER_COMPATIBLE mode on/off post-install."
-	echo
-	read -p "Make jail docker compatible right now? [y/N] " -n 1 -r reply && echo
+	print "Docker won't be installed by ${SCRIPT_NAME}."
+	print 'But it can setup the jail with the capabilities required to run docker.'
+	print 'You can turn DOCKER_COMPATIBLE mode on/off post-install.'
+	print
+	read -p "Make jail docker compatible right now? [y/N] " -n 1 -r reply && print
 	# Enter accepts default (no)
 	if ! [[ "${reply}" =~ ^[Yy]$ ]]; then docker_compatible=0; else docker_compatible=1; fi
-	echo
-	read -p "Give access to the GPU inside the jail? [y/N] " -n 1 -r reply && echo
+	print
+	read -p "Give access to the GPU inside the jail? [y/N] " -n 1 -r reply && print
 	# Enter accepts default (no)
 	if ! [[ "${reply}" =~ ^[Yy]$ ]]; then gpu_passthrough=0; else gpu_passthrough=1; fi
-	echo
-	echo "${YELLOW}${BOLD}WARNING: CHECK SYNTAX${NORMAL}"
-	echo
-	echo "You may pass additional flags to systemd-nspawn."
-	echo "With incorrect flags the jail may not start."
-	echo "It's possible to correct/add/remove flags post-install."
-	echo
-	read -p "Show the man page for systemd-nspawn? [y/N] " -n 1 -r reply && echo
+	print
+	print "${YELLOW}${BOLD}WARNING: CHECK SYNTAX${NORMAL}"
+	print
+	print 'You may pass additional flags to systemd-nspawn.'
+	print 'With incorrect flags the jail may not start.'
+	print 'It is possible to correct/add/remove flags post-install.'
+	print
+	read -p "Show the man page for systemd-nspawn? [y/N] " -n 1 -r reply && print
 
 	# Enter accepts default (no)
 	if [[ "${reply}" =~ ^[Yy]$ ]]; then
 		man systemd-nspawn
 	else
-		echo
-		echo "You may read the systemd-nspawn manual online:"
-		echo "https://manpages.debian.org/${distro}/systemd-container/systemd-nspawn.1.en.html"
+		print
+		print 'You may read the systemd-nspawn manual online:'
+		print "https://manpages.debian.org/${distro}/systemd-container/systemd-nspawn.1.en.html"
 	fi
 
 	# Backslashes and colons need to be escaped in bind mount options:
@@ -380,11 +383,11 @@ create_jail() {
 	# the corresponding command would be:
 	# --bind-ro='/mnt/data/weird chars \:?\\"'
 
-	echo
-	echo "For example to mount directories inside the jail you may add:"
-	echo "--bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory"
-	echo
-	read -e -r -p "Additional flags: " systemd_nspawn_user_args && echo
+	print
+	print 'For example to mount directories inside the jail you may add:'
+	print '--bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory'
+	print
+	read -e -r -p "Additional flags: " systemd_nspawn_user_args && print
 
 	# Create directory for rootfs
 	JAIL_ROOTFS_PATH="${jail_path}/${JAIL_ROOTFS_NAME}"
@@ -398,8 +401,8 @@ create_jail() {
 	LXC_CACHE_PATH=${lxc_cache_path} "${lxc_download_script_path}" \
 		--name="${jail_name}" --path="${jail_path}" --rootfs="${JAIL_ROOTFS_PATH}" \
 		--arch="${arch}" --dist="${distro}" --release="${release}" ||
-		fail "Aborted creating rootfs..."
-	echo
+		fail 'Aborted creating rootfs...'
+	print
 
 	# Assuming the name of your jail is "myjail"
 	# and "machinectl shell myjail" doesn't work
@@ -425,27 +428,27 @@ create_jail() {
 	# They don't shutdown cleanly via systemctl and machinectl...
 
 	if [[ "$(basename "$(readlink -f "${JAIL_ROOTFS_PATH}/sbin/init")")" != systemd ]]; then
-		echo "${YELLOW}${BOLD}WARNING: DISTRO NOT SUPPORTED${NORMAL}"
-		echo
-		echo "Chosen distro appears not to use systemd..."
-		echo
-		echo "You probably won't get a shell with:"
-		echo "machinectl shell ${jail_name}"
-		echo
-		echo "You may get a shell with this command:"
+		print "${YELLOW}${BOLD}WARNING: DISTRO NOT SUPPORTED${NORMAL}"
+		print
+		print 'Chosen distro appears not to use systemd...'
+		print
+		print 'You probably will not get a shell with:'
+		print "machinectl shell ${jail_name}"
+		print
+		print 'You may get a shell with this command:'
 		# About nsenter:
 		# shellcheck disable=SC2016
-		echo 'nsenter -t $(machinectl show '"${jail_name}"' -p Leader --value) -a /bin/sh -l'
-		echo
-		echo 'Read about the downsides of nsenter:'
-		echo 'https://github.com/systemd/systemd/issues/12785#issuecomment-503019081'
-		echo
-		echo "${BOLD}Using this distro with ${SCRIPT_NAME} is NOT recommended.${NORMAL}"
-		echo
-		read -p "Abort creating jail? [Y/n] " -n 1 -r reply && echo
+		print 'nsenter -t $(machinectl show '"${jail_name}"' -p Leader --value) -a /bin/sh -l'
+		print
+		print 'Read about the downsides of nsenter:'
+		print 'https://github.com/systemd/systemd/issues/12785#issuecomment-503019081'
+		print
+		print "${BOLD}Using this distro with ${SCRIPT_NAME} is NOT recommended.${NORMAL}"
+		print
+		read -p "Abort creating jail? [Y/n] " -n 1 -r reply && print
 		# Enter accepts default (yes)
 		[[ "${reply}" =~ ^([Yy]|)$ ]] && exit
-		echo
+		print
 	fi
 
 	# Config which systemd handles for us
@@ -510,28 +513,28 @@ create_jail() {
 	local systemd_nspawn_default_args=(--keep-unit --quiet --boot)
 
 	{
-		echo "DOCKER_COMPATIBLE=${docker_compatible}"
-		echo "GPU_PASSTHROUGH=${gpu_passthrough}"
-		echo "SYSTEMD_NSPAWN_USER_ARGS=${systemd_nspawn_user_args}"
-		echo
-		echo "# You generally won't need to change the options below"
-		echo "SYSTEMD_RUN_DEFAULT_ARGS=${systemd_run_default_args[*]}"
-		echo "SYSTEMD_NSPAWN_DEFAULT_ARGS=${systemd_nspawn_default_args[*]}"
+		print "DOCKER_COMPATIBLE=${docker_compatible}"
+		print "GPU_PASSTHROUGH=${gpu_passthrough}"
+		print "SYSTEMD_NSPAWN_USER_ARGS=${systemd_nspawn_user_args}"
+		print
+		print '# You generally will not need to change the options below'
+		print "SYSTEMD_RUN_DEFAULT_ARGS=${systemd_run_default_args[*]}"
+		print "SYSTEMD_NSPAWN_DEFAULT_ARGS=${systemd_nspawn_default_args[*]}"
 	} >"${jail_config_path}"
 
 	chmod 600 "${jail_config_path}"
 
 	# Remove the cleanup trap on exit
 	trap - EXIT
-	echo "Done creating the jail."
-	echo
-	read -p "Start the jail now? [Y/n] " -n 1 -r reply && echo
+	print 'Done creating the jail.'
+	print
+	read -p "Start the jail now? [Y/n] " -n 1 -r reply && print
 	# Enter accepts default (yes)
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
 		start_jail "${jail_name}"
 	else
-		echo
-		echo 'Skipped starting jail.'
+		print
+		print 'Skipped starting jail.'
 	fi
 }
 
@@ -542,15 +545,15 @@ create_jail() {
 case "${1-""}" in
 
 '')
-	read -p "Create a new jail? [Y/n] " -n 1 -r reply && echo
-	echo
+	read -p "Create a new jail? [Y/n] " -n 1 -r reply && print
+	print
 	# Enter accepts default (yes)
 	# https://stackoverflow.com/a/1885534
 	if [[ "${reply}" =~ ^([Yy]|)$ ]]; then
 		create_jail ""
 	else
 
-		echo "${USAGE}"
+		print "${USAGE}"
 	fi
 	;;
 
@@ -563,6 +566,6 @@ start)
 	;;
 
 *)
-	echo "${USAGE}"
+	print "${USAGE}"
 	;;
 esac
