@@ -6,7 +6,7 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.**
 
-The systemd-container package may be removed from a future release of TrueNAS SCALE without warning. If that happens, you may be unable to start jails create with `jlmkr.sh`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes it](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
+The systemd-container package may be removed from a future release of TrueNAS SCALE without warning ([unless it gets integrated](https://ixsystems.atlassian.net/browse/NAS-119787)). If that happens, you may be unable to start jails create with `jlmkr.sh`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes that](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
 
 **THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE**
 
@@ -110,7 +110,7 @@ TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Doc
 
 ### Incompatible Distros
 
-The rootfs image `jlmkr.sh` downloads come from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
+The rootfs image `jlmkr.sh` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
 
 ### Docker Info Warning
 
