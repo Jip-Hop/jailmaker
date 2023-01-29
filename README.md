@@ -8,6 +8,8 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 The systemd-container package may be removed from a future release of TrueNAS SCALE without warning. If that happens, you may be unable to start jails create with `jlmkr.sh`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes it](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
 
+**THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE**
+
 ## Summary
 
 TrueNAS SCALE already has everything onboard to create persistent Linux 'jails' with systemd-nspawn. This script helps with the following:
@@ -32,11 +34,13 @@ The `jlmkr.sh` script (and the jails + config it creates) are now stored on the 
 
 ## Create Jail
 
-Creating a jail is interactive. You'll be presented with questions which guide you through the process. The rootfs image it downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC, but we can use them too (although not all of them).
+Creating a jail is interactive. You'll be presented with questions which guide you through the process.
 
 ```shell
 ./jlmkr.sh create myjail
 ```
+
+After answering a few questions you should have your first jail up and running!
 
 ## Start Jail
 
@@ -76,6 +80,14 @@ systemctl status jlmkr-myjail
 journalctl -u jlmkr-myjail
 ```
 
+### Run Command in Jail
+
+If you want to run a command inside a jail, for example from a shell script or a CRON job, you may use `systemd-run` with the `--machine` flag. The example below runs the `env` command inside the jail.
+
+```
+systemd-run --machine myjail --quiet --pipe --wait --collect --service-type=exec env
+```
+
 ## Edit Jail Config
 
 Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.sh`. For example `./jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr.sh` for these changes to take effect.
@@ -93,6 +105,23 @@ Jailmaker won't install Docker for you, but it can setup the jail with the capab
 ## Comparison
 
 TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Docker (on the host).
+
+## Known Issues
+
+### Incompatible Distros
+
+The rootfs image `jlmkr.sh` downloads come from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
+
+### Docker Info Warning
+
+When running `docker info` inside the jail, it displays these warnings:
+
+```
+WARNING: bridge-nf-call-iptables is disabled
+WARNING: bridge-nf-call-ip6tables is disabled
+```
+
+Apparently [this is to be expected](https://docs.oracle.com/en/operating-systems/oracle-linux/docker/docker-KnownIssues.html#docker-issues). But can it be safely ignored? Or does it need fixing? So far I haven't noticed any issues... Using Apps causes the issue to go away since it loads the `br_netfilter` kernel module and enables `net.bridge.bridge-nf-call-iptables` and `net.bridge.bridge-nf-call-ip6tables` (but that may cause "guest container traffic to be blocked by iptables rules that are intended for the host.")
 
 ## References
 
