@@ -304,7 +304,7 @@ create_jail() {
 		print
 		read -p "Press any key to continue: " -n 1 -r reply && print
 		print
-		lxc_cache_path=${lxc_cache_path} "${lxc_download_script_path}" --list --arch="${arch}" || :
+		LXC_CACHE_PATH=${lxc_cache_path} "${lxc_download_script_path}" --list --arch="${arch}" || :
 		print
 		print 'Choose from the DIST column.'
 		print
@@ -453,7 +453,6 @@ create_jail() {
 
 	# Config which systemd handles for us
 	rm -f "${JAIL_ROOTFS_PATH}/etc/machine-id"
-	rm -f "${JAIL_ROOTFS_PATH}/etc/resolv.conf"
 	rm -f "${JAIL_ROOTFS_PATH}/etc/resolv.conf"
 	# https://github.com/systemd/systemd/issues/852
 	printf 'pts/%d\n' $(seq 0 10) >"${JAIL_ROOTFS_PATH}/etc/securetty"
