@@ -374,7 +374,7 @@ create_jail() {
 	else
 		print
 		print 'You may read the systemd-nspawn manual online:'
-		print "https://manpages.debian.org/${distro}/systemd-container/systemd-nspawn.1.en.html"
+		print "https://manpages.debian.org/${release}/systemd-container/systemd-nspawn.1.en.html"
 	fi
 
 	# Backslashes and colons need to be escaped in bind mount options:
