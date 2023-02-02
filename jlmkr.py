@@ -24,6 +24,15 @@ DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7
 SCRIPT_NAME = os.path.basename(__file__)
 SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
+# Only set a color if we have an interactive tty
+if sys.stdout.isatty():
+    BOLD = '\033[1m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    NORMAL = '\033[0m'
+else:
+    BOLD = RED = YELLOW = NORMAL = ''
+
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -81,7 +90,6 @@ def start_jail(jail_name):
     config = dict(config['DEFAULT'])
 
     print('Config loaded!')
-    print()
 
     systemd_run_additional_args = [
         f"--unit=jlmkr-{jail_name}",
@@ -114,8 +122,8 @@ def start_jail(jail_name):
             print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-iptables', 'w'))
             print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-ip6tables', 'w'))
         else:
-            eprint("Failed to load br_netfilter kernel module.")
-            print()
+            eprint(dedent('''
+                Failed to load br_netfilter kernel module.'''))
 
         # To properly run docker inside the jail, we need to lift restrictions
         # Without DevicePolicy=auto images with device nodes may not be pulled
@@ -151,12 +159,12 @@ def start_jail(jail_name):
         ]
 
     if config.get('gpu_passthrough') == '1':
-        systemd_nspawn_additional_args += [
-            "--property=DeviceAllow=char-drm rw"]
+        systemd_nspawn_additional_args.append(
+            "--property=DeviceAllow=char-drm rw")
 
         # Detect intel GPU device and if present add bind flag
         if os.path.exists('/dev/dri'):
-            systemd_nspawn_additional_args += ["--bind=/dev/dri"]
+            systemd_nspawn_additional_args.append("--bind=/dev/dri")
 
         # Detect nvidia GPU
         if os.path.exists('/dev/nvidia'):
@@ -166,16 +174,17 @@ def start_jail(jail_name):
                 nvidia_driver_files = subprocess.check_output(
                     ["nvidia-container-cli", "list"]).decode().split("\n")
             except subprocess.CalledProcessError:
-                eprint("Failed to run nvidia-container-cli.")
-                eprint("Unable to mount the nvidia driver files.")
-                print()
+                eprint(dedent('''
+                    Failed to run nvidia-container-cli.
+                    Unable to mount the nvidia driver files.'''))
 
             for file_path in nvidia_driver_files:
                 if file_path.startswith("/dev/"):
-                    systemd_nspawn_additional_args += ["--bind=" + file_path]
+                    systemd_nspawn_additional_args.append(
+                        f"--bind={file_path}")
                 else:
-                    systemd_nspawn_additional_args += [
-                        "--bind-ro=" + file_path]
+                    systemd_nspawn_additional_args.append(
+                        f"--bind-ro=={file_path}")
 
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
@@ -248,31 +257,30 @@ def cleanup(jail_path):
 def create_jail(jail_name):
 
     print("TODO: DISCLAIMER")
-    print()
 
     arch = 'amd64'
-
     lxc_dir = '.lxc'
     lxc_cache = os.path.join(lxc_dir, 'cache')
     lxc_download_script = os.path.join(lxc_dir, 'lxc-download.sh')
 
     if os.path.basename(os.getcwd()) != 'jailmaker':
-        eprint(f"{SCRIPT_NAME} needs to create files.")
-        eprint('Currently it can not decide if it is safe to create files in:')
-        eprint(f"{SCRIPT_DIR_PATH}")
-        eprint(
-            f"Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again.")
+
+        eprint(dedent(f"""
+            {SCRIPT_NAME} needs to create files.
+            Currently it can not decide if it is safe to create files in:
+            {SCRIPT_DIR_PATH}
+            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""))
         sys.exit(1)
 
     if not get_mount_point(os.getcwd()).startswith("/mnt/"):
-        print("{YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}")
-        print()
-        print(
-            f"{SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).")
-        print('Storing it on the boot-pool means losing all jails when updating TrueNAS.')
-        print('If you continue, jails will be stored under:')
-        print(f"{SCRIPT_DIR_PATH}")
-        print()
+        print(dedent(f"""
+            {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
+
+            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).
+            Storing it on the boot-pool means losing all jails when updating TrueNAS.
+            If you continue, jails will be stored under:
+            {SCRIPT_DIR_PATH}
+            """))
         if not agree("Do you wish to ignore this warning and continue?", 'n'):
             sys.exit(1)
 
