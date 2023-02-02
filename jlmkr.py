@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import argparse
+import configparser
 import contextlib
 import hashlib
 import os
-import platform
 import re
 import readline
 import shlex
@@ -12,8 +12,17 @@ import shutil
 import stat
 import subprocess
 import sys
-import textwrap
 import urllib.request
+
+from pathlib import Path
+from textwrap import dedent
+
+JAILS_DIR_PATH = 'jails'
+JAIL_CONFIG_NAME = 'config'
+JAIL_ROOTFS_NAME = 'rootfs'
+DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4'
+SCRIPT_NAME = os.path.basename(__file__)
+SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -25,20 +34,15 @@ def stat_chmod(file_path, mode):
 
 def agree(question, default=None):
 
-    if default == None:
-        hint = "[yes/no]"
-    elif default == "yes":
-        hint = "[YES/no]"
-    else:
-        hint = "[yes/NO]"
+    hint = "[Y/n]" if default == 'y' else ("[y/N]" if default == "n" else "[y/n]")
 
     while True:
         user_input = input(f"{question} {hint} ") or default
 
-        if user_input.lower() in ["yes", "no"]:
-            return user_input.lower() == "yes"
+        if user_input.lower() in ["y", "n"]:
+            return user_input.lower() == "y"
 
-        print("Invalid input. Please enter 'yes' or 'no'.")
+        eprint("Invalid input. Please type 'y' for yes or 'n' for no and press enter.")
 
 def input_with_default(prompt, default):
     readline.set_startup_hook(lambda: readline.insert_text(default))
@@ -47,105 +51,174 @@ def input_with_default(prompt, default):
     finally:
         readline.set_startup_hook()
 
-def start_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, script_name):
-    
-    jail_path = os.path.join(jails_dir_path, jail_name)
-    jail_config_path = os.path.join(jail_path, jail_config_name)
+def get_mount_point(path):
+    path = os.path.abspath(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+    return path
 
-    if not os.path.isfile(jail_config_path):
+def start_jail(jail_name):
+    
+    jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
+    jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
+    
+    # Workaround to read config file without section headers
+    # TODO: write a ConfigParser compatible config file
+    config = configparser.ConfigParser()
+    try:
+        config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())    
+    except FileNotFoundError:
+        eprint(f'Unable to find: {jail_config_path}.')
         sys.exit(1)
 
-    config = {}
-
-    with open(jail_config_path) as f:
-        for line in f:
-            try:
-                key, value = line.strip().split("=", 1)
-                if value:
-                    config[key] = value
-            except ValueError:
-                pass
-
+    config = dict(config['DEFAULT'])
+    
+    print('Config loaded!')    
+    print()
+    
     systemd_run_additional_args = [
-    "--unit=jlmkr-{}".format(jail_name),
-    "--working-directory=./{}".format(jail_path),
-    "--description=My nspawn jail {} [created with jailmaker]".format(jail_name),
+        f"--unit=jlmkr-{jail_name}",
+        f"--working-directory=./{jail_path}",
+        f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
     
     systemd_nspawn_additional_args = [
-        "--machine={}".format(jail_name),
-        "--directory={}".format(jail_rootfs_name),
+        f"--machine={jail_name}",
+        f"--directory={JAIL_ROOTFS_NAME}",
     ]
 
-    if config.get('DOCKER_COMPATIBLE') == '1':
-        with open("/proc/sys/net/ipv4/ip_forward", "w") as f:
-            f.write("1")
+    if config.get('docker_compatible') == '1':
+        # Enable ip forwarding on the host (docker needs it)
+        print(1, file=open('/proc/sys/net/ipv4/ip_forward', 'w'))
+        
+        # Load br_netfilter kernel module and enable bridge-nf-call to fix warning when running docker info:
+        # WARNING: bridge-nf-call-iptables is disabled
+        # WARNING: bridge-nf-call-ip6tables is disabled
+        #
+        # If we are using Apps then this should already be enabled
+        # May cause "guest container traffic to be blocked by iptables rules that are intended for the host"
+        # https://unix.stackexchange.com/q/720105/477308
+        # https://github.com/moby/moby/issues/24809
+        # https://docs.oracle.com/en/operating-systems/oracle-linux/docker/docker-KnownIssues.html#docker-issues
+        # https://wiki.libvirt.org/page/Net.bridge.bridge-nf-call_and_sysctl.conf
+        # https://serverfault.com/questions/963759/docker-breaks-libvirt-bridge-network
+
+        if subprocess.run(['modprobe', 'br_netfilter']).returncode == 0:
+            print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-iptables', 'w'))
+            print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-ip6tables', 'w'))
+        else:
+            eprint("Failed to load br_netfilter kernel module.")
+            print()
+
+        # To properly run docker inside the jail, we need to lift restrictions
+        # Without DevicePolicy=auto images with device nodes may not be pulled
+        # For example docker pull ljishen/sysbench would fail
+        # Fortunately I didn't encounter many images with device nodes...
+        #
+        # Issue: https://github.com/moby/moby/issues/35245
+        #
+        # The systemd-nspawn manual explicitly mentions:
+        # Device nodes may not be created
+        # https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
+        #
+        # Workaround: https://github.com/kinvolk/kube-spawn/pull/328
+        #
+        # However, it seems like the DeviceAllow= workaround may break in
+        # a future Debian release with systemd version 250 or higher
+        # https://github.com/systemd/systemd/issues/21987
+        #
+        # As of 29-1-2023 it still works with debian bookworm (nightly) and sid
+        # using the latest systemd version 252.4-2 so I think we're good!
+        #
+        # Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
+
         systemd_run_additional_args += [
             "--setenv=SYSTEMD_SECCOMP=0",
             "--property=DevicePolicy=auto",
         ]
+
+        # Add additional flags required for docker
         systemd_nspawn_additional_args += [
             "--capability=all",
             "--system-call-filter=add_key keyctl bpf",
         ]
 
-    if config.get('GPU_PASSTHROUGH') == '1':
+    if config.get('gpu_passthrough') == '1':
         systemd_nspawn_additional_args += ["--property=DeviceAllow=char-drm rw"]
-
-        try:
-            subprocess.check_output(["ls", "/dev/dri"])
+        
+        # Detect intel GPU device and if present add bind flag
+        if os.path.exists('/dev/dri'):
             systemd_nspawn_additional_args += ["--bind=/dev/dri"]
-        except subprocess.CalledProcessError:
-            pass
 
-        try:
-            subprocess.check_output(["ls", "/dev/nvidia"])
-            output = subprocess.check_output(["nvidia-container-cli", "list"]).decode().split("\n")
-            for line in output:
-                if line.startswith("/dev/"):
-                    systemd_nspawn_additional_args += ["--bind=" + line]
+        # Detect nvidia GPU
+        if os.path.exists('/dev/nvidia'):
+            nvidia_driver_files = []
+
+            try:
+                nvidia_driver_files = subprocess.check_output(["nvidia-container-cli", "list"]).decode().split("\n")
+            except subprocess.CalledProcessError:
+                eprint("Failed to run nvidia-container-cli.")
+                eprint("Unable to mount the nvidia driver files.")
+                print()
+
+            for file_path in nvidia_driver_files:
+                if file_path.startswith("/dev/"):
+                    systemd_nspawn_additional_args += ["--bind=" + file_path]
                 else:
-                    systemd_nspawn_additional_args += ["--bind-ro=" + line]
-        except subprocess.CalledProcessError:
-            pass
+                    systemd_nspawn_additional_args += ["--bind-ro=" + file_path]
 
-    args = []
+    cmd = ['systemd-run',
+        *shlex.split(config.get('systemd_run_default_args', '')),
+        *systemd_run_additional_args,
+        "--",
+        "systemd-nspawn",
+        *shlex.split(config.get('systemd_nspawn_default_args', '')),
+        *systemd_nspawn_additional_args,
+        *shlex.split(config.get('systemd_nspawn_user_args', ''))
+    ]
 
-    if config.get('SYSTEMD_RUN_DEFAULT_ARGS'):
-        args += shlex.split(config['SYSTEMD_RUN_DEFAULT_ARGS'])
+    print(dedent(f'''
+        Starting jail with the following command:
+        
+        {shlex.join(cmd)}
 
-    args += systemd_run_additional_args + ["--", "systemd-nspawn"]
-
-    if config.get('SYSTEMD_NSPAWN_DEFAULT_ARGS'):
-        args += shlex.split(config['SYSTEMD_NSPAWN_DEFAULT_ARGS'])
-
-    args += systemd_nspawn_additional_args
-
-    if config.get('SYSTEMD_NSPAWN_USER_ARGS'):
-        args += shlex.split(config['SYSTEMD_NSPAWN_USER_ARGS'])
-
-    args_string = " ".join(args)
-    # TODO: properly escape these, like printf %q
-    print(f"systemd-run {args_string}")
-
-    print(f"Starting jail with name: {jail_name}")
+        Starting jail with name: {jail_name}
+    '''))
 
     try:
-        subprocess.run(["systemd-run", *args], check=True)
+        subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
-        print("An error occurred")
+        eprint(dedent(f'''
+            Failed to start the jail...
+            In case of a config error, you may fix it with:
+            nano {shlex.quote(jail_config_path)}
+        '''))
+        sys.exit(1)
+    
+    print(dedent(f'''
+        Check logging:
+        journalctl -u jlmkr-{jail_name}
+
+        Check status:
+        systemctl status jlmkr-{jail_name}
+
+        Stop the jail:
+        machinectl stop {jail_name}
+
+        Get a shell:
+        machinectl shell {jail_name}
+    '''))
 
 def validate_sha256(file_path, digest):
     """
     Validates if a file matches a sha256 digest.
     """
-    with open(file_path, 'rb') as f:
-        file_hash = hashlib.sha256(f.read()).hexdigest()
-        return file_hash == digest
-
-def validate_download_script(file_path):
-    if os.path.isfile(file_path):
-        return validate_sha256(file_path, '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4')
+    try:
+        with open(file_path, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+            return file_hash == digest
+    except FileNotFoundError:
+        return False
 
 def download_file(url, file_path):
     try:
@@ -158,7 +231,7 @@ def cleanup(jail_path):
         eprint(f"Cleaning up: {jail_path}")
         shutil.rmtree(jail_path)
 
-def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, script_name, script_dir_path):
+def create_jail(jail_name):
 
     print("TODO: DISCLAIMER")
     print()
@@ -170,13 +243,22 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
     lxc_download_script = os.path.join(lxc_dir, 'lxc-download.sh')
 
     if os.path.basename(os.getcwd()) != 'jailmaker':
-        eprint(f"{script_name} needs to create files.")
+        eprint(f"{SCRIPT_NAME} needs to create files.")
         eprint('Currently it can not decide if it is safe to create files in:')
-        eprint(f"{script_dir_path}")
-        eprint(f"Please create a dedicated directory called 'jailmaker', store {script_name} there and try again.")
+        eprint(f"{SCRIPT_DIR_PATH}")
+        eprint(f"Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again.")
         sys.exit(1)
 
-    # TODO: insert the findmnt part here
+    if not get_mount_point(os.getcwd()).startswith("/mnt/"):
+        print("{YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}")
+        print()
+        print(f"{SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).")
+        print('Storing it on the boot-pool means losing all jails when updating TrueNAS.')
+        print('If you continue, jails will be stored under:')
+        print(f"{SCRIPT_DIR_PATH}")
+        print()
+        if not agree("Do you wish to ignore this warning and continue?", 'n'):
+            sys.exit(1)
 
     # Create the lxc dirs if nonexistent
     os.makedirs(lxc_dir, exist_ok=True)
@@ -185,13 +267,13 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
     stat_chmod(lxc_cache, 0o700)
 
     # Create the dir where to store the jails
-    os.makedirs(jails_dir_path, exist_ok=True)
-    stat_chmod(jails_dir_path, 0o700)
+    os.makedirs(JAILS_DIR_PATH, exist_ok=True)
+    stat_chmod(JAILS_DIR_PATH, 0o700)
 
     # Fetch the lxc download script if not present locally (or hash doesn't match)
-    if not validate_download_script(lxc_download_script):
+    if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
         download_file("https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
-        if not validate_download_script(lxc_download_script):
+        if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
             eprint('Abort! Downloaded script has unexpected contents.')
             sys.exit(1)
 
@@ -200,12 +282,12 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
     distro = 'debian'
     release = 'bullseye'
 
-    if not agree("Install the recommended distro (Debian 11)?", 'yes'):
+    if not agree("Install the recommended distro (Debian 11)?", 'y'):
         print()
         print("${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}")
         print()
         print('You may now choose from a list which distro to install.')
-        print(f"But not all of them will work with {script_name} since these images are made for LXC.")
+        print(f"But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.")
         print('Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).')
         print('Others (Alpine, Devuan, Void Linux) probably will not.')
         print()
@@ -229,7 +311,7 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
         print()
         if not re.match(r"^[.a-zA-Z0-9-]{1,64}$", jail_name) or jail_name.startswith(".") or ".." in jail_name:
             # TODO: output colors
-            eprint(textwrap.dedent('''
+            eprint(dedent('''
 
 				${YELLOW}${BOLD}WARNING: INVALID NAME${NORMAL}
 
@@ -241,7 +323,7 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
                 
                 '''))
         else:
-            jail_path = os.path.join(jails_dir_path, jail_name)
+            jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
             if os.path.exists(jail_path):
                 eprint('A jail with this name already exists.')
                 print()
@@ -250,21 +332,21 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
-        print(f"Docker won't be installed by {script_name}.")
+        print(f"Docker won't be installed by {SCRIPT_NAME}.")
         print('But it can setup the jail with the capabilities required to run docker.')
         print('You can turn DOCKER_COMPATIBLE mode on/off post-install.')
         print()
         
         docker_compatible = 0
         
-        if agree('Make jail docker compatible right now?', "no"):
+        if agree('Make jail docker compatible right now?', 'n'):
             docker_compatible = 1
         
         print()
 
         gpu_passthrough = 0
 
-        if agree('Give access to the GPU inside the jail?', "no"):
+        if agree('Give access to the GPU inside the jail?', 'n'):
             gpu_passthrough = 1
 
         print()
@@ -275,7 +357,7 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
         print('It is possible to correct/add/remove flags post-install.')
         print()
 
-        if agree('Show the man page for systemd-nspawn?', "no"):
+        if agree('Show the man page for systemd-nspawn?', 'n'):
             os.system("man systemd-nspawn")
         else:
             print()
@@ -295,8 +377,8 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
         systemd_nspawn_user_args = input("Additional flags: ") or ""
         print()
 
-        jail_config_path = os.path.join(jail_path, jail_config_name)
-        jail_rootfs_path = os.path.join(jail_path, jail_rootfs_name)
+        jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
+        jail_rootfs_path = os.path.join(jail_path, JAIL_ROOTFS_NAME)
 
         # Create directory for rootfs
         os.makedirs(jail_rootfs_path, exist_ok=True)
@@ -304,8 +386,8 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
 	    # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        subprocess.run(f"{lxc_download_script} --name={jail_name} --path={jail_path} --rootfs={jail_rootfs_path} \
-            --arch={arch} --dist={distro} --release={release}", shell=True, check=True, env={"LXC_CACHE_PATH": lxc_cache})
+        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}', \
+            f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
         
         # Assuming the name of your jail is "myjail"
         # and "machinectl shell myjail" doesn't work
@@ -423,32 +505,14 @@ def create_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, s
         sys.exit(130)
 
     except BaseException as error:
-        eprint('An exception occurred: {}'.format(error))
-
         cleanup(jail_path)
-        sys.exit(1)
+        raise error
     
-    if agree("Do you want to start the jail?", 'yes'):
-        start_jail(jail_name, jails_dir_path, jail_config_name, jail_rootfs_name, script_name)
+    if agree("Do you want to start the jail?", 'y'):
+        start_jail(jail_name)
 
 def main():
-
-    script_path = os.path.realpath(sys.argv[0])
-    script_name = os.path.basename(script_path)
-    script_dir_path = os.path.dirname(script_path)
-
-    jails_dir_path = 'jails'
-    jail_config_name = 'config'
-    jail_rootfs_name = 'rootfs'
     
-    if os.getuid() != 0:
-        eprint('Run this script as root...')
-        sys.exit(1)
-
-    os.chdir(script_dir_path)
-    # Set appropriate permissions (if not already set) for this file, since it's executed as root
-    stat_chmod(script_name, 0o700)
-
     parser = argparse.ArgumentParser(description='Jailmaker')
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
 
@@ -458,29 +522,37 @@ def main():
     create_parser = subparsers.add_parser('create')
     create_parser.add_argument('name', nargs='?', help='Name of the jail')
 
+    if os.getuid() != 0:
+        parser.print_usage()
+        eprint('Run this script as root...')
+        sys.exit(1)
+
+    os.chdir(SCRIPT_DIR_PATH)
+    # Set appropriate permissions (if not already set) for this file, since it's executed as root
+    stat_chmod(SCRIPT_NAME, 0o700)
+
     args = parser.parse_args()
 
     if args.subcommand == 'start':
         if args.name:
-            start_jail(args.name, jails_dir_path, jail_config_name, jail_rootfs_name, script_name)
+            start_jail(args.name)
         else:
-            parser.error('start subcommand requires a name argument')
+            parser.error('Please specify the name of the jail to start.')
 
     elif args.subcommand == 'create':
-        create_jail(args.name, jails_dir_path, jail_config_name, jail_rootfs_name, script_name, script_dir_path)
+        create_jail(args.name)
 
     elif args.subcommand:
         parser.print_usage()
 
     else:
-        if agree('Create a new jail?', 'yes'):
+        if agree('Create a new jail?', 'y'):
             print()
-            create_jail("", jails_dir_path, jail_config_name, jail_rootfs_name, script_name, script_dir_path)
+            create_jail("")
         else:
             parser.print_usage()
 
 if __name__ == '__main__':
-    # TODO: gracefully handle CTRL + C
     try:
         main()
     except KeyboardInterrupt:
