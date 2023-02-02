@@ -24,17 +24,21 @@ DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7
 SCRIPT_NAME = os.path.basename(__file__)
 SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
 
 def stat_chmod(file_path, mode):
     current_mode = stat.S_IMODE(os.stat(file_path).st_mode)
     if current_mode != mode:
         os.chmod(file_path, mode)
 
+
 def agree(question, default=None):
 
-    hint = "[Y/n]" if default == 'y' else ("[y/N]" if default == "n" else "[y/n]")
+    hint = "[Y/n]" if default == 'y' else (
+        "[y/N]" if default == "n" else "[y/n]")
 
     while True:
         user_input = input(f"{question} {hint} ") or default
@@ -44,6 +48,7 @@ def agree(question, default=None):
 
         eprint("Invalid input. Please type 'y' for yes or 'n' for no and press enter.")
 
+
 def input_with_default(prompt, default):
     readline.set_startup_hook(lambda: readline.insert_text(default))
     try:
@@ -51,37 +56,39 @@ def input_with_default(prompt, default):
     finally:
         readline.set_startup_hook()
 
+
 def get_mount_point(path):
     path = os.path.abspath(path)
     while not os.path.ismount(path):
         path = os.path.dirname(path)
     return path
 
+
 def start_jail(jail_name):
-    
+
     jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
     jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
-    
+
     # Workaround to read config file without section headers
     # TODO: write a ConfigParser compatible config file
     config = configparser.ConfigParser()
     try:
-        config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())    
+        config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())
     except FileNotFoundError:
         eprint(f'Unable to find: {jail_config_path}.')
         sys.exit(1)
 
     config = dict(config['DEFAULT'])
-    
-    print('Config loaded!')    
+
+    print('Config loaded!')
     print()
-    
+
     systemd_run_additional_args = [
         f"--unit=jlmkr-{jail_name}",
         f"--working-directory=./{jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
-    
+
     systemd_nspawn_additional_args = [
         f"--machine={jail_name}",
         f"--directory={JAIL_ROOTFS_NAME}",
@@ -90,7 +97,7 @@ def start_jail(jail_name):
     if config.get('docker_compatible') == '1':
         # Enable ip forwarding on the host (docker needs it)
         print(1, file=open('/proc/sys/net/ipv4/ip_forward', 'w'))
-        
+
         # Load br_netfilter kernel module and enable bridge-nf-call to fix warning when running docker info:
         # WARNING: bridge-nf-call-iptables is disabled
         # WARNING: bridge-nf-call-ip6tables is disabled
@@ -144,8 +151,9 @@ def start_jail(jail_name):
         ]
 
     if config.get('gpu_passthrough') == '1':
-        systemd_nspawn_additional_args += ["--property=DeviceAllow=char-drm rw"]
-        
+        systemd_nspawn_additional_args += [
+            "--property=DeviceAllow=char-drm rw"]
+
         # Detect intel GPU device and if present add bind flag
         if os.path.exists('/dev/dri'):
             systemd_nspawn_additional_args += ["--bind=/dev/dri"]
@@ -155,7 +163,8 @@ def start_jail(jail_name):
             nvidia_driver_files = []
 
             try:
-                nvidia_driver_files = subprocess.check_output(["nvidia-container-cli", "list"]).decode().split("\n")
+                nvidia_driver_files = subprocess.check_output(
+                    ["nvidia-container-cli", "list"]).decode().split("\n")
             except subprocess.CalledProcessError:
                 eprint("Failed to run nvidia-container-cli.")
                 eprint("Unable to mount the nvidia driver files.")
@@ -165,17 +174,18 @@ def start_jail(jail_name):
                 if file_path.startswith("/dev/"):
                     systemd_nspawn_additional_args += ["--bind=" + file_path]
                 else:
-                    systemd_nspawn_additional_args += ["--bind-ro=" + file_path]
+                    systemd_nspawn_additional_args += [
+                        "--bind-ro=" + file_path]
 
     cmd = ['systemd-run',
-        *shlex.split(config.get('systemd_run_default_args', '')),
-        *systemd_run_additional_args,
-        "--",
-        "systemd-nspawn",
-        *shlex.split(config.get('systemd_nspawn_default_args', '')),
-        *systemd_nspawn_additional_args,
-        *shlex.split(config.get('systemd_nspawn_user_args', ''))
-    ]
+           *shlex.split(config.get('systemd_run_default_args', '')),
+           *systemd_run_additional_args,
+           "--",
+           "systemd-nspawn",
+           *shlex.split(config.get('systemd_nspawn_default_args', '')),
+           *systemd_nspawn_additional_args,
+           *shlex.split(config.get('systemd_nspawn_user_args', ''))
+           ]
 
     print(dedent(f'''
         Starting jail with the following command:
@@ -194,7 +204,7 @@ def start_jail(jail_name):
             nano {shlex.quote(jail_config_path)}
         '''))
         sys.exit(1)
-    
+
     print(dedent(f'''
         Check logging:
         journalctl -u jlmkr-{jail_name}
@@ -209,6 +219,7 @@ def start_jail(jail_name):
         machinectl shell {jail_name}
     '''))
 
+
 def validate_sha256(file_path, digest):
     """
     Validates if a file matches a sha256 digest.
@@ -220,16 +231,19 @@ def validate_sha256(file_path, digest):
     except FileNotFoundError:
         return False
 
+
 def download_file(url, file_path):
     try:
         urllib.request.urlretrieve(url, file_path)
     except Exception as e:
         print(f"Failed to download file {file_path} from {url}: {e}")
 
+
 def cleanup(jail_path):
     if os.path.isdir(jail_path):
         eprint(f"Cleaning up: {jail_path}")
         shutil.rmtree(jail_path)
+
 
 def create_jail(jail_name):
 
@@ -246,13 +260,15 @@ def create_jail(jail_name):
         eprint(f"{SCRIPT_NAME} needs to create files.")
         eprint('Currently it can not decide if it is safe to create files in:')
         eprint(f"{SCRIPT_DIR_PATH}")
-        eprint(f"Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again.")
+        eprint(
+            f"Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again.")
         sys.exit(1)
 
     if not get_mount_point(os.getcwd()).startswith("/mnt/"):
         print("{YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}")
         print()
-        print(f"{SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).")
+        print(
+            f"{SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).")
         print('Storing it on the boot-pool means losing all jails when updating TrueNAS.')
         print('If you continue, jails will be stored under:')
         print(f"{SCRIPT_DIR_PATH}")
@@ -272,7 +288,8 @@ def create_jail(jail_name):
 
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-        download_file("https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
+        download_file(
+            "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
             eprint('Abort! Downloaded script has unexpected contents.')
             sys.exit(1)
@@ -287,18 +304,20 @@ def create_jail(jail_name):
         print("${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}")
         print()
         print('You may now choose from a list which distro to install.')
-        print(f"But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.")
+        print(
+            f"But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.")
         print('Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).')
         print('Others (Alpine, Devuan, Void Linux) probably will not.')
         print()
         input('Press Enter to continue...')
         print()
-        subprocess.call([lxc_download_script, "--list", "--arch=" + arch], env={"LXC_CACHE_PATH": lxc_cache})
+        subprocess.call([lxc_download_script, "--list",
+                        "--arch=" + arch], env={"LXC_CACHE_PATH": lxc_cache})
         print()
         print('Choose from the DIST column.')
         print()
         distro = input("Distro: ")
-        print()      
+        print()
         print('Choose from the RELEASE column (or ARCH if RELEASE is empty).')
         print()
         release = input("Release: ")
@@ -336,12 +355,12 @@ def create_jail(jail_name):
         print('But it can setup the jail with the capabilities required to run docker.')
         print('You can turn DOCKER_COMPATIBLE mode on/off post-install.')
         print()
-        
+
         docker_compatible = 0
-        
+
         if agree('Make jail docker compatible right now?', 'n'):
             docker_compatible = 1
-        
+
         print()
 
         gpu_passthrough = 0
@@ -362,7 +381,8 @@ def create_jail(jail_name):
         else:
             print()
             print('You may read the systemd-nspawn manual online:')
-            print(f"https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html")
+            print(
+                f"https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html")
 
         # Backslashes and colons need to be escaped in bind mount options:
         # e.g. to bind mount a file called:
@@ -383,12 +403,12 @@ def create_jail(jail_name):
         # Create directory for rootfs
         os.makedirs(jail_rootfs_path, exist_ok=True)
         # LXC download script needs to write to this file during install
-	    # but we don't need it so we will remove it later
+        # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}', \
-            f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
-        
+        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}',
+                        f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
+
         # Assuming the name of your jail is "myjail"
         # and "machinectl shell myjail" doesn't work
         # Try:
@@ -414,7 +434,8 @@ def create_jail(jail_name):
         print()
 
         # TODO: don't crash if init_path doesn't exist?
-        init_path = os.path.realpath(os.path.join(jail_rootfs_path, 'sbin', 'init'))
+        init_path = os.path.realpath(
+            os.path.join(jail_rootfs_path, 'sbin', 'init'))
         if os.path.basename(init_path) != "systemd":
             raise Exception("Error, not systemd!")
             # TODO: show warning and allow to continue
@@ -428,7 +449,7 @@ def create_jail(jail_name):
         with open(os.path.join(jail_rootfs_path, 'etc', 'securetty'), "w") as f:
             for i in range(0, 11):
                 f.write(f"pts/{i}\n")
-        
+
         # TODO: fix networking config
 #         network_dir_path = os.path.join(jail_rootfs_path, "etc", "systemd", "network")
 
@@ -469,11 +490,11 @@ def create_jail(jail_name):
         # it won't be possible to start the same jail twice
 
         systemd_run_default_args = [
-            '--property=KillMode=mixed', 
-            '--property=Type=notify', 
+            '--property=KillMode=mixed',
+            '--property=Type=notify',
             '--property=RestartForceExitStatus=133',
             '--property=SuccessExitStatus=133',
-            '--property=Delegate=yes', 
+            '--property=Delegate=yes',
             '--property=TasksMax=infinity',
             '--collect',
             '--setenv=SYSTEMD_NSPAWN_LOCK=0'
@@ -507,12 +528,13 @@ def create_jail(jail_name):
     except BaseException as error:
         cleanup(jail_path)
         raise error
-    
+
     if agree("Do you want to start the jail?", 'y'):
         start_jail(jail_name)
 
+
 def main():
-    
+
     parser = argparse.ArgumentParser(description='Jailmaker')
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
 
@@ -551,6 +573,7 @@ def main():
             create_jail("")
         else:
             parser.print_usage()
+
 
 if __name__ == '__main__':
     try:
