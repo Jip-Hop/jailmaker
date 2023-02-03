@@ -38,6 +38,11 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def fail(*args, **kwargs):
+    eprint(*args, **kwargs)
+    sys.exit(1)
+
+
 def stat_chmod(file_path, mode):
     current_mode = stat.S_IMODE(os.stat(file_path).st_mode)
     if current_mode != mode:
@@ -84,8 +89,7 @@ def start_jail(jail_name):
     try:
         config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())
     except FileNotFoundError:
-        eprint(f'Unable to find: {jail_config_path}.')
-        sys.exit(1)
+        fail(f'Unable to find: {jail_config_path}.')
 
     config = dict(config['DEFAULT'])
 
@@ -207,12 +211,11 @@ def start_jail(jail_name):
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
-        eprint(dedent(f'''
+        fail(dedent(f'''
             Failed to start the jail...
             In case of a config error, you may fix it with:
             nano {shlex.quote(jail_config_path)}
         '''))
-        sys.exit(1)
 
     print(dedent(f'''
         Check logging:
@@ -264,13 +267,11 @@ def create_jail(jail_name):
     lxc_download_script = os.path.join(lxc_dir, 'lxc-download.sh')
 
     if os.path.basename(os.getcwd()) != 'jailmaker':
-
-        eprint(dedent(f"""
+        fail(dedent(f"""
             {SCRIPT_NAME} needs to create files.
             Currently it can not decide if it is safe to create files in:
             {SCRIPT_DIR_PATH}
             Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""))
-        sys.exit(1)
 
     if not get_mount_point(os.getcwd()).startswith("/mnt/"):
         print(dedent(f"""
@@ -282,7 +283,7 @@ def create_jail(jail_name):
             {SCRIPT_DIR_PATH}
             """))
         if not agree("Do you wish to ignore this warning and continue?", 'n'):
-            sys.exit(1)
+            fail("Aborting...")
 
     # Create the lxc dirs if nonexistent
     os.makedirs(lxc_dir, exist_ok=True)
@@ -299,8 +300,7 @@ def create_jail(jail_name):
         download_file(
             "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-            eprint('Abort! Downloaded script has unexpected contents.')
-            sys.exit(1)
+            fail('Abort! Downloaded script has unexpected contents.')
 
     stat_chmod(lxc_download_script, 0o700)
 
@@ -308,15 +308,14 @@ def create_jail(jail_name):
     release = 'bullseye'
 
     if not agree("Install the recommended distro (Debian 11)?", 'y'):
-        print()
-        print("${YELLOW}${BOLD}WARNING: ADVANCED USAGE${NORMAL}")
-        print()
-        print('You may now choose from a list which distro to install.')
-        print(
-            f"But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.")
-        print('Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).')
-        print('Others (Alpine, Devuan, Void Linux) probably will not.')
-        print()
+        print(dedent(f"""
+            {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
+
+            You may now choose from a list which distro to install.
+            But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.
+            Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
+            Others (Alpine, Devuan, Void Linux) probably will not.
+        """))
         input('Press Enter to continue...')
         print()
         subprocess.call([lxc_download_script, "--list",
@@ -528,11 +527,7 @@ def create_jail(jail_name):
 
         os.chmod(jail_config_path, 0o600)
 
-    except KeyboardInterrupt:
-        print('Interrupted')
-        cleanup(jail_path)
-        sys.exit(130)
-
+    # Cleanup on any exception and rethrow
     except BaseException as error:
         cleanup(jail_path)
         raise error
@@ -554,8 +549,7 @@ def main():
 
     if os.getuid() != 0:
         parser.print_usage()
-        eprint('Run this script as root...')
-        sys.exit(1)
+        fail('Run this script as root...')
 
     os.chdir(SCRIPT_DIR_PATH)
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
