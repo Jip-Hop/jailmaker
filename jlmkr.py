@@ -451,6 +451,7 @@ def create_jail(jail_name):
         # https://thoughtbot.com/blog/tab-completion-in-gnu-readline
         # https://stackoverflow.com/a/67118744
         # https://github.com/python-cmd2/cmd2/blob/ee7599f9ac0dbb6ce3793f6b665ba1200d3ef9a3/cmd2/cmd2.py
+        # https://stackoverflow.com/a/40152927
 
         systemd_nspawn_user_args = input("Additional flags: ") or ""
         # Disable tab auto completion
