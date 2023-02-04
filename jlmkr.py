@@ -3,6 +3,7 @@
 import argparse
 import configparser
 import contextlib
+import ctypes
 import hashlib
 import os
 import re
@@ -320,7 +321,7 @@ def create_jail(jail_name):
     # Create the dir where to store the jails
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
     stat_chmod(JAILS_DIR_PATH, 0o700)
-    
+
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
         urllib.request.urlretrieve(
@@ -332,7 +333,7 @@ def create_jail(jail_name):
 
     distro = 'debian'
     release = 'bullseye'
-    
+
     print()
     if not agree("Install the recommended distro (Debian 11)?", 'y'):
         print(dedent(f"""
@@ -432,7 +433,28 @@ def create_jail(jail_name):
             --bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory
         """))
 
+        # Enable tab auto completion of file paths after the = symbol
+        readline.set_completer_delims('=')
+        readline.parse_and_bind('tab: complete')
+
+        readline_lib = ctypes.CDLL(readline.__file__)
+        rl_completer_quote_characters = ctypes.c_char_p.in_dll(
+            readline_lib,
+            "rl_completer_quote_characters"
+        )
+
+        # Let the readline library know about quote characters for completion
+        rl_completer_quote_characters.value = "\"'".encode('utf-8')
+
+        # TODO: more robust tab completion of file paths with space or = character
+        # Currently completing these only works when the path is quoted
+        # https://thoughtbot.com/blog/tab-completion-in-gnu-readline
+        # https://stackoverflow.com/a/67118744
+        # https://github.com/python-cmd2/cmd2/blob/ee7599f9ac0dbb6ce3793f6b665ba1200d3ef9a3/cmd2/cmd2.py
+
         systemd_nspawn_user_args = input("Additional flags: ") or ""
+        # Disable tab auto completion
+        readline.parse_and_bind('tab: self-insert')
         print()
 
         jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
