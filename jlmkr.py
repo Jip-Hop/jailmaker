@@ -70,7 +70,7 @@ def start_jail(jail_name):
     config = configparser.ConfigParser()
     try:
         # Workaround to read config file without section headers
-        config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())
+        config.read_string('[DEFAULT]\n'+Path(jail_config_path).read_text())
     except FileNotFoundError:
         fail(f'Unable to find: {jail_config_path}.')
 
