@@ -15,7 +15,7 @@ import sys
 import urllib.request
 
 from inspect import cleandoc
-from pathlib import Path
+from pathlib import Path, PurePath
 from textwrap import dedent
 
 # Only set a color if we have an interactive tty
@@ -30,7 +30,8 @@ else:
 DISCLAIMER = f"""{YELLOW}{BOLD}USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 
-DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
+DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
+    via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
 
 VERSION = '0.0.0'
 
@@ -43,50 +44,24 @@ SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 
 def eprint(*args, **kwargs):
+    """
+    Print to stderr.
+    """
     print(*args, file=sys.stderr, **kwargs)
 
 
 def fail(*args, **kwargs):
+    """
+    Print to stderr and exit.
+    """
     eprint(*args, **kwargs)
     sys.exit(1)
 
 
-def stat_chmod(file_path, mode):
-    current_mode = stat.S_IMODE(os.stat(file_path).st_mode)
-    if current_mode != mode:
-        os.chmod(file_path, mode)
-
-
-def agree(question, default=None):
-
-    hint = "[Y/n]" if default == 'y' else (
-        "[y/N]" if default == "n" else "[y/n]")
-
-    while True:
-        user_input = input(f"{question} {hint} ") or default
-
-        if user_input.lower() in ["y", "n"]:
-            return user_input.lower() == "y"
-
-        eprint("Invalid input. Please type 'y' for yes or 'n' for no and press enter.")
-
-
-def input_with_default(prompt, default):
-    readline.set_startup_hook(lambda: readline.insert_text(default))
-    try:
-        return input(prompt)
-    finally:
-        readline.set_startup_hook()
-
-
-def get_mount_point(path):
-    path = os.path.abspath(path)
-    while not os.path.ismount(path):
-        path = os.path.dirname(path)
-    return path
-
-
 def start_jail(jail_name):
+    """
+    Start jail with given name.
+    """
 
     jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
     jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
@@ -100,7 +75,7 @@ def start_jail(jail_name):
 
     config = dict(config['DEFAULT'])
 
-    print('Config loaded!')
+    print("Config loaded!")
 
     systemd_run_additional_args = [
         f"--unit=jlmkr-{jail_name}",
@@ -133,8 +108,8 @@ def start_jail(jail_name):
             print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-iptables', 'w'))
             print(1, file=open('/proc/sys/net/bridge/bridge-nf-call-ip6tables', 'w'))
         else:
-            eprint(dedent('''
-                Failed to load br_netfilter kernel module.'''))
+            eprint(dedent("""
+                Failed to load br_netfilter kernel module."""))
 
         # To properly run docker inside the jail, we need to lift restrictions
         # Without DevicePolicy=auto images with device nodes may not be pulled
@@ -159,23 +134,23 @@ def start_jail(jail_name):
         # Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
 
         systemd_run_additional_args += [
-            "--setenv=SYSTEMD_SECCOMP=0",
-            "--property=DevicePolicy=auto",
+            '--setenv=SYSTEMD_SECCOMP=0',
+            '--property=DevicePolicy=auto',
         ]
 
         # Add additional flags required for docker
         systemd_nspawn_additional_args += [
-            "--capability=all",
-            "--system-call-filter=add_key keyctl bpf",
+            '--capability=all',
+            '--system-call-filter=add_key keyctl bpf',
         ]
 
     if config.get('gpu_passthrough') == '1':
         systemd_nspawn_additional_args.append(
-            "--property=DeviceAllow=char-drm rw")
+            '--property=DeviceAllow=char-drm rw')
 
         # Detect intel GPU device and if present add bind flag
         if os.path.exists('/dev/dri'):
-            systemd_nspawn_additional_args.append("--bind=/dev/dri")
+            systemd_nspawn_additional_args.append('--bind=/dev/dri')
 
         # Detect nvidia GPU
         if os.path.exists('/dev/nvidia'):
@@ -183,14 +158,14 @@ def start_jail(jail_name):
 
             try:
                 nvidia_driver_files = subprocess.check_output(
-                    ["nvidia-container-cli", "list"]).decode().split("\n")
+                    ['nvidia-container-cli', 'list']).decode().split('\n')
             except subprocess.CalledProcessError:
-                eprint(dedent('''
+                eprint(dedent("""
                     Failed to run nvidia-container-cli.
-                    Unable to mount the nvidia driver files.'''))
+                    Unable to mount the nvidia driver files."""))
 
             for file_path in nvidia_driver_files:
-                if file_path.startswith("/dev/"):
+                if file_path.startswith('/dev/'):
                     systemd_nspawn_additional_args.append(
                         f"--bind={file_path}")
                 else:
@@ -200,31 +175,31 @@ def start_jail(jail_name):
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
            *systemd_run_additional_args,
-           "--",
-           "systemd-nspawn",
+           '--',
+           'systemd-nspawn',
            *shlex.split(config.get('systemd_nspawn_default_args', '')),
            *systemd_nspawn_additional_args,
            *shlex.split(config.get('systemd_nspawn_user_args', ''))
            ]
 
-    print(dedent(f'''
+    print(dedent(f"""
         Starting jail with the following command:
         
         {shlex.join(cmd)}
 
         Starting jail with name: {jail_name}
-    '''))
+    """))
 
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
-        fail(dedent(f'''
+        fail(dedent(f"""
             Failed to start the jail...
             In case of a config error, you may fix it with:
             nano {shlex.quote(jail_config_path)}
-        '''))
+        """))
 
-    print(dedent(f'''
+    print(dedent(f"""
         Check logging:
         journalctl -u jlmkr-{jail_name}
 
@@ -236,7 +211,27 @@ def start_jail(jail_name):
 
         Get a shell:
         machinectl shell {jail_name}
-    '''))
+    """))
+
+
+def cleanup(jail_path):
+    """
+    Cleanup after aborted jail creation.
+    """
+    if os.path.isdir(jail_path):
+        eprint(f"Cleaning up: {jail_path}")
+        shutil.rmtree(jail_path)
+
+
+def input_with_default(prompt, default):
+    """
+    Ask user for input with a default value already provided.
+    """
+    readline.set_startup_hook(lambda: readline.insert_text(default))
+    try:
+        return input(prompt)
+    finally:
+        readline.set_startup_hook()
 
 
 def validate_sha256(file_path, digest):
@@ -251,20 +246,44 @@ def validate_sha256(file_path, digest):
         return False
 
 
-def download_file(url, file_path):
-    try:
-        urllib.request.urlretrieve(url, file_path)
-    except Exception as e:
-        eprint(f"Failed to download file {file_path} from {url}: {e}")
+def stat_chmod(file_path, mode):
+    """
+    Change mode if file doesn't already have this mode.
+    """
+    if mode != stat.S_IMODE(os.stat(file_path).st_mode):
+        os.chmod(file_path, mode)
 
 
-def cleanup(jail_path):
-    if os.path.isdir(jail_path):
-        eprint(f"Cleaning up: {jail_path}")
-        shutil.rmtree(jail_path)
+def agree(question, default=None):
+    """
+    Ask user a yes/no question.
+    """
+    hint = '[Y/n]' if default == 'y' else (
+        '[y/N]' if default == 'n' else '[y/n]')
+
+    while True:
+        user_input = input(f"{question} {hint} ") or default
+
+        if user_input.lower() in ['y', 'n']:
+            return user_input.lower() == 'y'
+
+        eprint("Invalid input. Please type 'y' for yes or 'n' for no and press enter.")
+
+
+def get_mount_point(path):
+    """
+    Return the mount point on which the given path resides.
+    """
+    path = os.path.abspath(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+    return path
 
 
 def create_jail(jail_name):
+    """
+    Create jail with given name.
+    """
 
     print(DISCLAIMER)
 
@@ -280,15 +299,15 @@ def create_jail(jail_name):
             {SCRIPT_DIR_PATH}
             Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""))
 
-    if not get_mount_point(os.getcwd()).startswith("/mnt/"):
+    if not PurePath(get_mount_point(os.getcwd())).is_relative_to('/mnt'):
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
 
-            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently isn't).
+            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
             Storing it on the boot-pool means losing all jails when updating TrueNAS.
             If you continue, jails will be stored under:
             {SCRIPT_DIR_PATH}
-            """))
+        """))
         if not agree("Do you wish to ignore this warning and continue?", 'n'):
             fail("Aborting...")
 
@@ -301,19 +320,20 @@ def create_jail(jail_name):
     # Create the dir where to store the jails
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
     stat_chmod(JAILS_DIR_PATH, 0o700)
-
+    
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-        download_file(
+        urllib.request.urlretrieve(
             "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-            fail('Abort! Downloaded script has unexpected contents.')
+            fail("Abort! Downloaded script has unexpected contents.")
 
     stat_chmod(lxc_download_script, 0o700)
 
     distro = 'debian'
     release = 'bullseye'
-
+    
+    print()
     if not agree("Install the recommended distro (Debian 11)?", 'y'):
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
@@ -323,19 +343,21 @@ def create_jail(jail_name):
             Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
             Others (Alpine, Devuan, Void Linux) probably will not.
         """))
-        input('Press Enter to continue...')
+        input("Press Enter to continue...")
         print()
-        subprocess.call([lxc_download_script, "--list",
-                        "--arch=" + arch], env={"LXC_CACHE_PATH": lxc_cache})
+
+        subprocess.call([lxc_download_script, '--list',
+                        '--arch=' + arch], env={'LXC_CACHE_PATH': lxc_cache})
+
         print(dedent("""
             Choose from the DIST column.
-            """))
+        """))
 
         distro = input("Distro: ")
 
         print(dedent("""
             Choose from the RELEASE column (or ARCH if RELEASE is empty).
-            """))
+        """))
 
         release = input("Release: ")
 
@@ -344,32 +366,33 @@ def create_jail(jail_name):
     while jail_path == None:
         print()
         jail_name = input_with_default("Enter jail name: ", jail_name).strip()
-        print()
         if not re.match(r"^[.a-zA-Z0-9-]{1,64}$", jail_name) or jail_name.startswith(".") or ".." in jail_name:
-            eprint(dedent(f'''
+            eprint(dedent(f"""
 
-				{YELLOW}{BOLD}WARNING: INVALID NAME{NORMAL}
+                {YELLOW}{BOLD}WARNING: INVALID NAME{NORMAL}
 
-				A valid name consists of:
-				- allowed characters (alphanumeric, dash, dot)
-				- no leading or trailing dots
-				- no sequences of multiple dots
-				- max 64 characters
-                
-                '''))
+                A valid name consists of:
+                - allowed characters (alphanumeric, dash, dot)
+                - no leading or trailing dots
+                - no sequences of multiple dots
+                - max 64 characters
+
+            """))
         else:
             jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
             if os.path.exists(jail_path):
-                eprint('A jail with this name already exists.')
+                print()
+                eprint("A jail with this name already exists.")
                 jail_path = None
 
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
-        print(dedent(f"""Docker won't be installed by {SCRIPT_NAME}.
+        print(dedent(f"""
+            Docker won't be installed by {SCRIPT_NAME}.
             But it can setup the jail with the capabilities required to run docker.
             You can turn DOCKER_COMPATIBLE mode on/off post-install.
-            """))
+        """))
 
         docker_compatible = 0
 
@@ -389,14 +412,14 @@ def create_jail(jail_name):
             You may pass additional flags to systemd-nspawn.
             With incorrect flags the jail may not start.
             It is possible to correct/add/remove flags post-install.
-            """))
+        """))
 
         if agree('Show the man page for systemd-nspawn?', 'n'):
             os.system("man systemd-nspawn")
         else:
-            print(dedent(f'''
+            print(dedent(f"""
                 You may read the systemd-nspawn manual online:
-                https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html'''))
+                https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html"""))
 
         # Backslashes and colons need to be escaped in bind mount options:
         # e.g. to bind mount a file called:
@@ -404,10 +427,10 @@ def create_jail(jail_name):
         # the corresponding command would be:
         # --bind-ro='/mnt/data/weird chars \:?\\"'
 
-        print(dedent('''
+        print(dedent("""
             For example to mount directories inside the jail you may add:
             --bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory
-            '''))
+        """))
 
         systemd_nspawn_user_args = input("Additional flags: ") or ""
         print()
@@ -464,7 +487,7 @@ def create_jail(jail_name):
                 https://github.com/systemd/systemd/issues/12785#issuecomment-503019081
 
                 {BOLD}Using this distro with {SCRIPT_NAME} is NOT recommended.{NORMAL}
-                """))
+            """))
 
             if agree("Abort creating jail?", 'y'):
                 exit(1)
@@ -478,32 +501,42 @@ def create_jail(jail_name):
         print('\n'.join([f"pts/{i}" for i in range(0, 11)]),
               file=open(os.path.join(jail_rootfs_path, 'etc/securetty'), 'w'))
 
-        # TODO: fix networking config
-#         network_dir_path = os.path.join(jail_rootfs_path, "etc/systemd/network")
+        network_dir_path = os.path.join(
+            jail_rootfs_path, "etc/systemd/network")
 
-#         if os.path.isdir(network_dir_path):
-#             default_host0_network_file = os.path.join(jail_rootfs_path, "lib/systemd/network/80-container-host0.network")
+        # Modify default network settings, if network_dir_path exists
+        if os.path.isdir(network_dir_path):
+            default_host0_network_file = os.path.join(
+                jail_rootfs_path, "lib/systemd/network/80-container-host0.network")
 
-#             if os.path.isfile(default_host0_network_file):
-#                 override_network_file = os.path.join(network_dir_path, "80-container-host0.network")
-#                 with open(default_host0_network_file) as f:
-#                     data = f.read().replace("LinkLocalAddressing=yes", "LinkLocalAddressing=no").replace("DHCP=yes", "DHCP=ipv4")
-#                 with open(override_network_file, "w") as f:
-#                     f.write(data)
+            # Check if default host0 network file exists
+            if os.path.isfile(default_host0_network_file):
+                override_network_file = os.path.join(
+                    network_dir_path, "80-container-host0.network")
 
-#             with open(os.path.join(network_dir_path, "mv-dhcp.network"), "w") as f:
-#                 f.write("""[Match]
-# Virtualization=container
-# Name=mv-*
+                # Override the default 80-container-host0.network file (by using the same name)
+                # This config applies when using the --network-bridge option of systemd-nspawn
+                # Disable LinkLocalAddressing or else the container won't get IP address via DHCP
+                # Enable DHCP only for ipv4 else systemd-networkd will complain that LinkLocalAddressing is disabled
+                print(Path(default_host0_network_file).read_text().replace("LinkLocalAddressing=yes",
+                      "LinkLocalAddressing=no").replace("DHCP=yes", "DHCP=ipv4"), file=open(override_network_file, 'w'))
 
-# [Network]
-# DHCP=ipv4
-# LinkLocalAddressing=no
+            # Setup DHCP for macvlan network interfaces
+            # This config applies when using the --network-macvlan option of systemd-nspawn
+            # https://www.debian.org/doc/manuals/debian-reference/ch05.en.html#_the_modern_network_configuration_without_gui
+            print(cleandoc("""
+                [Match]
+                Virtualization=container
+                Name=mv-*
 
-# [DHCPv4]
-# UseDNS=true
-# UseTimezone=true
-# """)
+                [Network]
+                DHCP=ipv4
+                LinkLocalAddressing=no
+
+                [DHCPv4]
+                UseDNS=true
+                UseTimezone=true
+            """), file=open(os.path.join(network_dir_path, "mv-dhcp.network"), "w"))
 
         # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
         # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
@@ -559,7 +592,8 @@ def create_jail(jail_name):
 
 def main():
 
-    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=DISCLAIMER)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, epilog=DISCLAIMER)
     parser.add_argument('--version', action='version', version=VERSION)
 
     subparsers = parser.add_subparsers(title='commands', dest='subcommand')
@@ -570,11 +604,11 @@ def main():
     start_parser = subparsers.add_parser(name='start', epilog=DISCLAIMER)
     start_parser.add_argument('name', help='name of the jail')
 
-    parser.usage=f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
+    parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
 
     if os.getuid() != 0:
         parser.print_usage()
-        fail('Run this script as root...')
+        fail("Run this script as root...")
 
     os.chdir(SCRIPT_DIR_PATH)
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
@@ -586,7 +620,7 @@ def main():
         if args.name:
             start_jail(args.name)
         else:
-            parser.error('Please specify the name of the jail to start.')
+            parser.error("Please specify the name of the jail to start.")
 
     elif args.subcommand == 'create':
         create_jail(args.name)
@@ -595,7 +629,7 @@ def main():
         parser.print_usage()
 
     else:
-        if agree('Create a new jail?', 'y'):
+        if agree("Create a new jail?", 'y'):
             print()
             create_jail("")
         else:
