@@ -14,15 +14,9 @@ import subprocess
 import sys
 import urllib.request
 
+from inspect import cleandoc
 from pathlib import Path
 from textwrap import dedent
-
-JAILS_DIR_PATH = 'jails'
-JAIL_CONFIG_NAME = 'config'
-JAIL_ROOTFS_NAME = 'rootfs'
-DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4'
-SCRIPT_NAME = os.path.basename(__file__)
-SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
@@ -32,6 +26,20 @@ if sys.stdout.isatty():
     NORMAL = '\033[0m'
 else:
     BOLD = RED = YELLOW = NORMAL = ''
+
+DISCLAIMER = f"""{YELLOW}{BOLD}USE THIS SCRIPT AT YOUR OWN RISK!
+IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
+
+DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
+
+VERSION = '0.0.0'
+
+JAILS_DIR_PATH = 'jails'
+JAIL_CONFIG_NAME = 'config'
+JAIL_ROOTFS_NAME = 'rootfs'
+DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4'
+SCRIPT_NAME = os.path.basename(__file__)
+SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 
 def eprint(*args, **kwargs):
@@ -83,10 +91,9 @@ def start_jail(jail_name):
     jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
     jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
 
-    # Workaround to read config file without section headers
-    # TODO: write a ConfigParser compatible config file
     config = configparser.ConfigParser()
     try:
+        # Workaround to read config file without section headers
         config.read_string('[DEFAULT]'+Path(jail_config_path).read_text())
     except FileNotFoundError:
         fail(f'Unable to find: {jail_config_path}.')
@@ -248,7 +255,7 @@ def download_file(url, file_path):
     try:
         urllib.request.urlretrieve(url, file_path)
     except Exception as e:
-        print(f"Failed to download file {file_path} from {url}: {e}")
+        eprint(f"Failed to download file {file_path} from {url}: {e}")
 
 
 def cleanup(jail_path):
@@ -259,7 +266,7 @@ def cleanup(jail_path):
 
 def create_jail(jail_name):
 
-    print("TODO: DISCLAIMER")
+    print(DISCLAIMER)
 
     arch = 'amd64'
     lxc_dir = '.lxc'
@@ -320,26 +327,28 @@ def create_jail(jail_name):
         print()
         subprocess.call([lxc_download_script, "--list",
                         "--arch=" + arch], env={"LXC_CACHE_PATH": lxc_cache})
-        print()
-        print('Choose from the DIST column.')
-        print()
+        print(dedent("""
+            Choose from the DIST column.
+            """))
+
         distro = input("Distro: ")
-        print()
-        print('Choose from the RELEASE column (or ARCH if RELEASE is empty).')
-        print()
+
+        print(dedent("""
+            Choose from the RELEASE column (or ARCH if RELEASE is empty).
+            """))
+
         release = input("Release: ")
-    print()
 
     jail_path = None
 
     while jail_path == None:
+        print()
         jail_name = input_with_default("Enter jail name: ", jail_name).strip()
         print()
         if not re.match(r"^[.a-zA-Z0-9-]{1,64}$", jail_name) or jail_name.startswith(".") or ".." in jail_name:
-            # TODO: output colors
-            eprint(dedent('''
+            eprint(dedent(f'''
 
-				${YELLOW}${BOLD}WARNING: INVALID NAME${NORMAL}
+				{YELLOW}{BOLD}WARNING: INVALID NAME{NORMAL}
 
 				A valid name consists of:
 				- allowed characters (alphanumeric, dash, dot)
@@ -352,16 +361,15 @@ def create_jail(jail_name):
             jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
             if os.path.exists(jail_path):
                 eprint('A jail with this name already exists.')
-                print()
                 jail_path = None
 
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
-        print(f"Docker won't be installed by {SCRIPT_NAME}.")
-        print('But it can setup the jail with the capabilities required to run docker.')
-        print('You can turn DOCKER_COMPATIBLE mode on/off post-install.')
-        print()
+        print(dedent(f"""Docker won't be installed by {SCRIPT_NAME}.
+            But it can setup the jail with the capabilities required to run docker.
+            You can turn DOCKER_COMPATIBLE mode on/off post-install.
+            """))
 
         docker_compatible = 0
 
@@ -375,21 +383,20 @@ def create_jail(jail_name):
         if agree('Give access to the GPU inside the jail?', 'n'):
             gpu_passthrough = 1
 
-        print()
-        print("${YELLOW}${BOLD}WARNING: CHECK SYNTAX${NORMAL}")
-        print()
-        print('You may pass additional flags to systemd-nspawn.')
-        print('With incorrect flags the jail may not start.')
-        print('It is possible to correct/add/remove flags post-install.')
-        print()
+        print(dedent(f"""
+            {YELLOW}{BOLD}WARNING: CHECK SYNTAX{NORMAL}
+        
+            You may pass additional flags to systemd-nspawn.
+            With incorrect flags the jail may not start.
+            It is possible to correct/add/remove flags post-install.
+            """))
 
         if agree('Show the man page for systemd-nspawn?', 'n'):
             os.system("man systemd-nspawn")
         else:
-            print()
-            print('You may read the systemd-nspawn manual online:')
-            print(
-                f"https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html")
+            print(dedent(f'''
+                You may read the systemd-nspawn manual online:
+                https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html'''))
 
         # Backslashes and colons need to be escaped in bind mount options:
         # e.g. to bind mount a file called:
@@ -397,10 +404,11 @@ def create_jail(jail_name):
         # the corresponding command would be:
         # --bind-ro='/mnt/data/weird chars \:?\\"'
 
-        print()
-        print('For example to mount directories inside the jail you may add:')
-        print('--bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory')
-        print()
+        print(dedent('''
+            For example to mount directories inside the jail you may add:
+            --bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory
+            '''))
+
         systemd_nspawn_user_args = input("Additional flags: ") or ""
         print()
 
@@ -438,30 +446,43 @@ def create_jail(jail_name):
         # nsenter -t $(machinectl show myjail -p Leader --value) -a /bin/sh -l
         # But alpine jails made with jailmaker have other issues
         # They don't shutdown cleanly via systemctl and machinectl...
-        print()
 
-        # TODO: don't crash if init_path doesn't exist?
-        init_path = os.path.realpath(
-            os.path.join(jail_rootfs_path, 'sbin', 'init'))
-        if os.path.basename(init_path) != "systemd":
-            raise Exception("Error, not systemd!")
-            # TODO: show warning and allow to continue
+        if os.path.basename(os.path.realpath(
+                os.path.join(jail_rootfs_path, 'sbin/init'))) != "systemd":
+            print(dedent(f"""
+                {YELLOW}{BOLD}WARNING: DISTRO NOT SUPPORTED{NORMAL}
+                
+                Chosen distro appears not to use systemd...
+
+                You probably will not get a shell with:
+                machinectl shell {jail_name}
+
+                You may get a shell with this command:
+                nsenter -t $(machinectl show {jail_name} -p Leader --value) -a /bin/sh -l
+
+                Read about the downsides of nsenter:
+                https://github.com/systemd/systemd/issues/12785#issuecomment-503019081
+
+                {BOLD}Using this distro with {SCRIPT_NAME} is NOT recommended.{NORMAL}
+                """))
+
+            if agree("Abort creating jail?", 'y'):
+                exit(1)
 
         with contextlib.suppress(FileNotFoundError):
             # Remove config which systemd handles for us
-            os.remove(os.path.join(jail_rootfs_path, 'etc', 'machine-id'))
-            os.remove(os.path.join(jail_rootfs_path, 'etc', 'resolv.conf'))
+            os.remove(os.path.join(jail_rootfs_path, 'etc/machine-id'))
+            os.remove(os.path.join(jail_rootfs_path, 'etc/resolv.conf'))
 
         # https://github.com/systemd/systemd/issues/852
-        with open(os.path.join(jail_rootfs_path, 'etc', 'securetty'), "w") as f:
-            for i in range(0, 11):
-                f.write(f"pts/{i}\n")
+        print('\n'.join([f"pts/{i}" for i in range(0, 11)]),
+              file=open(os.path.join(jail_rootfs_path, 'etc/securetty'), 'w'))
 
         # TODO: fix networking config
-#         network_dir_path = os.path.join(jail_rootfs_path, "etc", "systemd", "network")
+#         network_dir_path = os.path.join(jail_rootfs_path, "etc/systemd/network")
 
 #         if os.path.isdir(network_dir_path):
-#             default_host0_network_file = os.path.join(jail_rootfs_path, "lib", "systemd", "network", "80-container-host0.network")
+#             default_host0_network_file = os.path.join(jail_rootfs_path, "lib/systemd/network/80-container-host0.network")
 
 #             if os.path.isfile(default_host0_network_file):
 #                 override_network_file = os.path.join(network_dir_path, "80-container-host0.network")
@@ -513,17 +534,16 @@ def create_jail(jail_name):
             '--boot'
         ]
 
-        config = (
-            f"DOCKER_COMPATIBLE={docker_compatible}\n"
-            f"GPU_PASSTHROUGH={gpu_passthrough}\n"
-            f"SYSTEMD_NSPAWN_USER_ARGS={systemd_nspawn_user_args}\n"
-            "# You generally will not need to change the options below\n"
-            f"SYSTEMD_RUN_DEFAULT_ARGS={' '.join(systemd_run_default_args)}\n"
-            f"SYSTEMD_NSPAWN_DEFAULT_ARGS={' '.join(systemd_nspawn_default_args)}\n"
-        )
+        config = cleandoc(f"""
+            docker_compatible={docker_compatible}
+            gpu_passthrough={gpu_passthrough}
+            systemd_nspawn_user_args={systemd_nspawn_user_args}
+            # You generally will not need to change the options below
+            systemd_run_default_args={' '.join(systemd_run_default_args)}
+            systemd_nspawn_default_args={' '.join(systemd_nspawn_default_args)}
+        """)
 
-        with open(os.path.join(jail_path, 'config'), "w") as f:
-            f.write(config)
+        print(config, file=open(os.path.join(jail_path, 'config'), 'w'))
 
         os.chmod(jail_config_path, 0o600)
 
@@ -532,20 +552,25 @@ def create_jail(jail_name):
         cleanup(jail_path)
         raise error
 
+    print()
     if agree("Do you want to start the jail?", 'y'):
         start_jail(jail_name)
 
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Jailmaker')
-    subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
+    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=DISCLAIMER)
+    parser.add_argument('--version', action='version', version=VERSION)
 
-    start_parser = subparsers.add_parser('start')
-    start_parser.add_argument('name', help='Name of the jail')
+    subparsers = parser.add_subparsers(title='commands', dest='subcommand')
 
-    create_parser = subparsers.add_parser('create')
-    create_parser.add_argument('name', nargs='?', help='Name of the jail')
+    create_parser = subparsers.add_parser(name='create', epilog=DISCLAIMER)
+    create_parser.add_argument('name', nargs='?', help='name of the jail')
+
+    start_parser = subparsers.add_parser(name='start', epilog=DISCLAIMER)
+    start_parser.add_argument('name', help='name of the jail')
+
+    parser.usage=f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
 
     if os.getuid() != 0:
         parser.print_usage()
