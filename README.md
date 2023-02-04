@@ -112,17 +112,6 @@ TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Doc
 
 The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
 
-### Docker Info Warning
-
-When running `docker info` inside the jail, it displays these warnings:
-
-```
-WARNING: bridge-nf-call-iptables is disabled
-WARNING: bridge-nf-call-ip6tables is disabled
-```
-
-Apparently [this is to be expected](https://docs.oracle.com/en/operating-systems/oracle-linux/docker/docker-KnownIssues.html#docker-issues). But can it be safely ignored? Or does it need fixing? So far I haven't noticed any issues... Using Apps causes the issue to go away since it loads the `br_netfilter` kernel module and enables `net.bridge.bridge-nf-call-iptables` and `net.bridge.bridge-nf-call-ip6tables` (but that may cause "guest container traffic to be blocked by iptables rules that are intended for the host.")
-
 ## References
 
 - [systemd-nspawn](https://manpages.debian.org/bullseye/systemd-container/systemd-nspawn.1.en.html)
