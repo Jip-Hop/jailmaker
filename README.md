@@ -6,7 +6,7 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.**
 
-The systemd-container package may be removed from a future release of TrueNAS SCALE without warning ([unless it gets integrated](https://ixsystems.atlassian.net/browse/NAS-119787)). If that happens, you may be unable to start jails create with `jlmkr.sh`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes that](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
+The systemd-container package may be removed from a future release of TrueNAS SCALE without warning ([unless it gets integrated](https://ixsystems.atlassian.net/browse/NAS-119787)). If that happens, you may be unable to start jails create with `jlmkr.py`. The jail itself and the files within it will not be lost, but in order to start your jail you'd have to reinstall systemd-container, roll back to the previous release or migrate to LXC [if iXsystems includes that](https://ixsystems.atlassian.net/browse/NAS-114193?focusedCommentId=175214). Since systemd-container comes by default with Debian on which SCALE is built, I don't think it will be removed. But there's no guarantee!
 
 **THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE.**
 
@@ -22,22 +22,22 @@ TrueNAS SCALE already has everything onboard to create persistent Linux 'jails' 
 
 ## Installation
 
-Create a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.sh`.
+Create a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
 
 ```shell
 cd /mnt/mypool/jailmaker
-curl --location --remote-name https://raw.githubusercontent.com/Jip-Hop/jailmaker/main/jlmkr.sh
-chmod +x jlmkr.sh
+curl --location --remote-name https://raw.githubusercontent.com/Jip-Hop/jailmaker/main/jlmkr.py
+chmod +x jlmkr.py
 ```
 
-The `jlmkr.sh` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE.
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE.
 
 ## Create Jail
 
 Creating a jail is interactive. You'll be presented with questions which guide you through the process.
 
 ```shell
-./jlmkr.sh create myjail
+./jlmkr.py create myjail
 ```
 
 After answering a few questions you should have your first jail up and running!
@@ -45,16 +45,16 @@ After answering a few questions you should have your first jail up and running!
 ## Start Jail
 
 ```shell
-./jlmkr.sh start myjail
+./jlmkr.py start myjail
 ```
 
 ### Autostart Jail on Boot
 
-In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.sh start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface.
+In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface.
 
 ## Additional Commands
 
-For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.sh` script does not play a role here.
+For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
 
 ### Stop Jail
 
@@ -90,7 +90,7 @@ systemd-run --machine myjail --quiet --pipe --wait --collect --service-type=exec
 
 ## Edit Jail Config
 
-Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.sh`. For example `./jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr.sh` for these changes to take effect.
+Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `./jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr.py` for these changes to take effect.
 
 ## Networking
 
@@ -110,7 +110,7 @@ TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Doc
 
 ### Incompatible Distros
 
-The rootfs image `jlmkr.sh` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
+The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
 
 ### Docker Info Warning
 
