@@ -430,7 +430,7 @@ def create_jail(jail_name):
 
         print(dedent("""
             For example to mount directories inside the jail you may add:
-            --bind=/mnt/a/readwrite/directory --bind-ro=/mnt/a/readonly/directory
+            --bind='/mnt/data/a writable directory/' --bind-ro='/mnt/data/a readonly directory/'
         """))
 
         # Enable tab auto completion of file paths after the = symbol
@@ -614,6 +614,8 @@ def create_jail(jail_name):
 
 
 def main():
+    if os.stat(__file__).st_uid != 0:
+        fail("This script should be owned by the root user...")
 
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, epilog=DISCLAIMER)
