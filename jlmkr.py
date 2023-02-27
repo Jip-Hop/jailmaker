@@ -185,7 +185,7 @@ def start_jail(jail_name):
 
     print(dedent(f"""
         Starting jail with the following command:
-        
+
         {shlex.join(cmd)}
 
         Starting jail with name: {jail_name}
@@ -409,7 +409,7 @@ def create_jail(jail_name):
 
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: CHECK SYNTAX{NORMAL}
-        
+
             You may pass additional flags to systemd-nspawn.
             With incorrect flags the jail may not start.
             It is possible to correct/add/remove flags post-install.
@@ -497,7 +497,7 @@ def create_jail(jail_name):
                 os.path.join(jail_rootfs_path, 'sbin/init'))) != "systemd":
             print(dedent(f"""
                 {YELLOW}{BOLD}WARNING: DISTRO NOT SUPPORTED{NORMAL}
-                
+
                 Chosen distro appears not to use systemd...
 
                 You probably will not get a shell with:
@@ -628,6 +628,7 @@ def delete_jail(jail_name):
 
 
 def main():
+    eprint("hello basti")
     if os.stat(__file__).st_uid != 0:
         fail("This script should be owned by the root user...")
 
