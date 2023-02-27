@@ -171,7 +171,7 @@ def start_jail(jail_name):
                         f"--bind={file_path}")
                 else:
                     systemd_nspawn_additional_args.append(
-                        f"--bind-ro=={file_path}")
+                        f"--bind-ro={file_path}")
 
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
