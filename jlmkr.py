@@ -185,7 +185,7 @@ def start_jail(jail_name):
 
     print(dedent(f"""
         Starting jail with the following command:
-        
+
         {shlex.join(cmd)}
 
         Starting jail with name: {jail_name}
@@ -409,7 +409,7 @@ def create_jail(jail_name):
 
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: CHECK SYNTAX{NORMAL}
-        
+
             You may pass additional flags to systemd-nspawn.
             With incorrect flags the jail may not start.
             It is possible to correct/add/remove flags post-install.
@@ -497,7 +497,7 @@ def create_jail(jail_name):
                 os.path.join(jail_rootfs_path, 'sbin/init'))) != "systemd":
             print(dedent(f"""
                 {YELLOW}{BOLD}WARNING: DISTRO NOT SUPPORTED{NORMAL}
-                
+
                 Chosen distro appears not to use systemd...
 
                 You probably will not get a shell with:
@@ -617,14 +617,18 @@ def delete_jail(jail_name):
     """
     Delete jail with given name.
     """
-    # stop the jail
-    os.system(f"machinectl stop {jail_name}")
-
     jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
 
-    if os.path.isdir(jail_path):
-        eprint(f"Cleaning up: {jail_path}")
-        shutil.rmtree(jail_path)
+    check = input(f"CAUTION: Type \"{jail_name}\" to confirm! \n") or ""
+    if check == jail_name:
+        if os.path.isdir(jail_path):
+            os.system(f"machinectl stop {jail_name}")
+            eprint(f"Cleaning up: {jail_path}")
+            shutil.rmtree(jail_path)
+        else:
+            eprint(f"A jail with name {jail_name} does not exist.")
+    else:
+        eprint("Wrong name, nothing happens.")
 
 
 def main():
