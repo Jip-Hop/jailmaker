@@ -617,18 +617,21 @@ def delete_jail(jail_name):
     """
     Delete jail with given name.
     """
-    # stop the jail
-    os.system(f"machinectl stop {jail_name}")
-
     jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
 
-    if os.path.isdir(jail_path):
-        eprint(f"Cleaning up: {jail_path}")
-        shutil.rmtree(jail_path)
+    check = input(f"CAUTION: Type \"{jail_name}\" to confirm! \n") or ""
+    if check == jail_name:
+        if os.path.isdir(jail_path):
+            os.system(f"machinectl stop {jail_name}")
+            eprint(f"Cleaning up: {jail_path}")
+            shutil.rmtree(jail_path)
+        else:
+            eprint(f"A jail with name {jail_name} does not exist.")
+    else:
+        eprint("Wrong name, nothing happens.")
 
 
 def main():
-    eprint("hello basti")
     if os.stat(__file__).st_uid != 0:
         fail("This script should be owned by the root user...")
 
