@@ -613,6 +613,20 @@ def create_jail(jail_name):
         start_jail(jail_name)
 
 
+def delete_jail(jail_name):
+    """
+    Delete jail with given name.
+    """
+    # stop the jail
+    os.system(f"machinectl stop {jail_name}")
+
+    jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
+
+    if os.path.isdir(jail_path):
+        eprint(f"Cleaning up: {jail_path}")
+        shutil.rmtree(jail_path)
+
+
 def main():
     if os.stat(__file__).st_uid != 0:
         fail("This script should be owned by the root user...")
@@ -627,6 +641,9 @@ def main():
     create_parser.add_argument('name', nargs='?', help='name of the jail')
 
     start_parser = subparsers.add_parser(name='start', epilog=DISCLAIMER)
+    start_parser.add_argument('name', help='name of the jail')
+
+    start_parser = subparsers.add_parser(name='delete', epilog=DISCLAIMER)
     start_parser.add_argument('name', help='name of the jail')
 
     parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
@@ -649,6 +666,9 @@ def main():
 
     elif args.subcommand == 'create':
         create_jail(args.name)
+
+    elif args.subcommand == 'delete':
+        delete_jail(args.name)
 
     elif args.subcommand:
         parser.print_usage()
