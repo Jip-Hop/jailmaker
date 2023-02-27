@@ -154,7 +154,7 @@ def start_jail(jail_name):
             systemd_nspawn_additional_args.append('--bind=/dev/dri')
 
         # Detect nvidia GPU
-        if os.path.exists('/dev/nvidia'):
+        if os.path.exists('/dev/nvidia0'):
             nvidia_driver_files = []
 
             try:
