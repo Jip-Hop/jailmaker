@@ -647,11 +647,12 @@ def delete_jail(jail_name):
         if check_jail_name_available(jail_name, False):
             eprint(f"A jail with name {jail_name} does not exist.")
         else:
-            check = input(f'CAUTION: Type "{jail_name}" to confirm jail deletion! \n') or ""
+            check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n') or ""
             if check == jail_name:
                 jail_path = get_jail_path(jail_name)
-                print(f"Trying to stop {jail_path} if it was running...")
+                print(f"\nTrying to stop {jail_name} if it was running...")
                 subprocess.run(['machinectl', 'stop', jail_name])
+                # Need to sleep since deleting immediately after stop causes problems...
                 time.sleep(1)
                 print(f"Cleaning up: {jail_path}")
                 shutil.rmtree(jail_path)
@@ -660,13 +661,19 @@ def delete_jail(jail_name):
 
 def list_jails():
     """
-    List all running jails.
+    List all available and running jails.
     """
-    jail_path = os.path.join(JAILS_DIR_PATH)
 
-    eprint("\nAvailable containers:\n")
-    os.system(f"ls -l {jail_path} | grep '^d' | awk '{{print $NF}}'")
-    eprint("\nCurrently running containers:\n")
+    jails = os.listdir(JAILS_DIR_PATH)
+
+    print("Available jails:\n")
+    if not len(jails):
+        print("No jails.")
+    else:
+        for jail in jails:
+            print(f"{jail}")
+
+    print("\nCurrently running:\n")
     os.system(f"machinectl list")
 
 def main():
