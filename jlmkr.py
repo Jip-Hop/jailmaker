@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import urllib.request
 
 from inspect import cleandoc
@@ -59,12 +60,16 @@ def fail(*args, **kwargs):
     sys.exit(1)
 
 
+def get_jail_path(jail_name):
+    return os.path.join(JAILS_DIR_PATH, jail_name)
+
+
 def start_jail(jail_name):
     """
     Start jail with given name.
     """
 
-    jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
+    jail_path = get_jail_path(jail_name)
     jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
 
     config = configparser.ConfigParser()
@@ -281,6 +286,38 @@ def get_mount_point(path):
     return path
 
 
+def check_jail_name_valid(jail_name, warn=True):
+    """
+    Return True if jail name matches the required format.
+    """
+    if re.match(r"^[.a-zA-Z0-9-]{1,64}$", jail_name) and not jail_name.startswith(".") and ".." not in jail_name:
+        return True
+
+    if warn:
+        eprint(dedent(f"""
+            {YELLOW}{BOLD}WARNING: INVALID NAME{NORMAL}
+
+            A valid name consists of:
+            - allowed characters (alphanumeric, dash, dot)
+            - no leading or trailing dots
+            - no sequences of multiple dots
+            - max 64 characters"""))
+    return False
+
+
+def check_jail_name_available(jail_name, warn=True):
+    """
+    Return True if jail name is not yet taken.
+    """
+    if not os.path.exists(get_jail_path(jail_name)):
+        return True
+
+    if warn:
+        print()
+        eprint("A jail with this name already exists.")
+    return False
+
+
 def create_jail(jail_name):
     """
     Create jail with given name.
@@ -362,29 +399,14 @@ def create_jail(jail_name):
 
         release = input("Release: ")
 
-    jail_path = None
-
-    while jail_path == None:
+    while True:
         print()
         jail_name = input_with_default("Enter jail name: ", jail_name).strip()
-        if not re.match(r"^[.a-zA-Z0-9-]{1,64}$", jail_name) or jail_name.startswith(".") or ".." in jail_name:
-            eprint(dedent(f"""
+        if check_jail_name_valid(jail_name):
+            if check_jail_name_available(jail_name):
+                break
 
-                {YELLOW}{BOLD}WARNING: INVALID NAME{NORMAL}
-
-                A valid name consists of:
-                - allowed characters (alphanumeric, dash, dot)
-                - no leading or trailing dots
-                - no sequences of multiple dots
-                - max 64 characters
-
-            """))
-        else:
-            jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
-            if os.path.exists(jail_path):
-                print()
-                eprint("A jail with this name already exists.")
-                jail_path = None
+    jail_path = get_jail_path(jail_name)
 
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
@@ -617,18 +639,21 @@ def delete_jail(jail_name):
     """
     Delete jail with given name.
     """
-    jail_path = os.path.join(JAILS_DIR_PATH, jail_name)
 
-    check = input(f"CAUTION: Type \"{jail_name}\" to confirm! \n") or ""
-    if check == jail_name:
-        if os.path.isdir(jail_path):
-            os.system(f"machinectl stop {jail_name}")
-            eprint(f"Cleaning up: {jail_path}")
-            shutil.rmtree(jail_path)
-        else:
+    if check_jail_name_valid(jail_name):
+        if check_jail_name_available(jail_name, False):
             eprint(f"A jail with name {jail_name} does not exist.")
-    else:
-        eprint("Wrong name, nothing happens.")
+        else:
+            check = input(f'CAUTION: Type "{jail_name}" to confirm jail deletion! \n') or ""
+            if check == jail_name:
+                jail_path = get_jail_path(jail_name)
+                print(f"Trying to stop {jail_path} if it was running...")
+                subprocess.run(['machinectl', 'stop', jail_name])
+                time.sleep(1)
+                print(f"Cleaning up: {jail_path}")
+                shutil.rmtree(jail_path)
+            else:
+                eprint("Wrong name, nothing happened.")
 
 
 def main():
@@ -642,13 +667,14 @@ def main():
     subparsers = parser.add_subparsers(title='commands', dest='subcommand')
 
     create_parser = subparsers.add_parser(name='create', epilog=DISCLAIMER)
-    create_parser.add_argument('name', nargs='?', help='name of the jail')
+    create_parser.add_argument(
+        'name', nargs='?', help='name of the jail to create')
 
     start_parser = subparsers.add_parser(name='start', epilog=DISCLAIMER)
-    start_parser.add_argument('name', help='name of the jail')
+    start_parser.add_argument('name', help='name of the jail to start')
 
     start_parser = subparsers.add_parser(name='delete', epilog=DISCLAIMER)
-    start_parser.add_argument('name', help='name of the jail')
+    start_parser.add_argument('name', help='name of the jail to delete')
 
     parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
 
