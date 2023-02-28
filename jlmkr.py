@@ -664,7 +664,7 @@ def list_jails():
     List all available and running jails.
     """
 
-    jails = os.listdir(JAILS_DIR_PATH)
+    jails = next(os.walk('jails'))[1]
 
     print("Available jails:\n")
     if not len(jails):
