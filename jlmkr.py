@@ -154,7 +154,7 @@ def start_jail(jail_name):
             systemd_nspawn_additional_args.append('--bind=/dev/dri')
 
         # Detect nvidia GPU
-        if os.path.exists('/dev/nvidia'):
+        if os.path.exists('/dev/nvidia0'):
             nvidia_driver_files = []
 
             try:
@@ -166,12 +166,15 @@ def start_jail(jail_name):
                     Unable to mount the nvidia driver files."""))
 
             for file_path in nvidia_driver_files:
-                if file_path.startswith('/dev/'):
+                if not file_path:
+                    # Skip empty strings
+                    continue
+                elif file_path.startswith('/dev/'):
                     systemd_nspawn_additional_args.append(
                         f"--bind={file_path}")
                 else:
                     systemd_nspawn_additional_args.append(
-                        f"--bind-ro=={file_path}")
+                        f"--bind-ro={file_path}")
 
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
