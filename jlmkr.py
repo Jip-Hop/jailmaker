@@ -674,7 +674,7 @@ def list_jails():
             print(f"{jail}")
 
     print("\nCurrently running:\n")
-    os.system(f"machinectl list")
+    subprocess.run(['machinectl', 'list'])
 
 def main():
     if os.stat(__file__).st_uid != 0:
