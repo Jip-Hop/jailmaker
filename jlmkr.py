@@ -166,7 +166,10 @@ def start_jail(jail_name):
                     Unable to mount the nvidia driver files."""))
 
             for file_path in nvidia_driver_files:
-                if file_path.startswith('/dev/'):
+                if not file_path:
+                    # Skip empty strings
+                    continue
+                elif file_path.startswith('/dev/'):
                     systemd_nspawn_additional_args.append(
                         f"--bind={file_path}")
                 else:
