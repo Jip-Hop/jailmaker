@@ -170,6 +170,13 @@ def start_jail(jail_name):
                     Failed to run nvidia-container-cli.
                     Unable to mount the nvidia driver files."""))
 
+            if len(nvidia_driver_files):
+                additional_nvidia_library = '/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1'
+                if os.path.exists(additional_nvidia_library):
+                    # Add libnvidia-ml.so.1
+                    # Not listed by nvidia-container-cli, but required
+                    nvidia_driver_files.append(additional_nvidia_library)
+
             for file_path in nvidia_driver_files:
                 if not file_path:
                     # Skip empty strings
@@ -647,7 +654,8 @@ def delete_jail(jail_name):
         if check_jail_name_available(jail_name, False):
             eprint(f"A jail with name {jail_name} does not exist.")
         else:
-            check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n') or ""
+            check = input(
+                f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n') or ""
             if check == jail_name:
                 jail_path = get_jail_path(jail_name)
                 print(f"\nTrying to stop {jail_name} if it was running...")
@@ -658,6 +666,7 @@ def delete_jail(jail_name):
                 shutil.rmtree(jail_path)
             else:
                 eprint("Wrong name, nothing happened.")
+
 
 def list_jails():
     """
@@ -675,6 +684,7 @@ def list_jails():
 
     print("\nCurrently running:\n")
     subprocess.run(['machinectl', 'list'])
+
 
 def main():
     if os.stat(__file__).st_uid != 0:
