@@ -630,6 +630,16 @@ def delete_jail(jail_name):
     else:
         eprint("Wrong name, nothing happens.")
 
+def list_jails():
+    """
+    List all running jails.
+    """
+    jail_path = os.path.join(JAILS_DIR_PATH)
+
+    eprint("\nAvailable containers:\n")
+    os.system(f"ls -l {jail_path} | grep '^d' | awk '{{print $NF}}'")
+    eprint("\nCurrently running containers:\n")
+    os.system(f"machinectl list")
 
 def main():
     if os.stat(__file__).st_uid != 0:
@@ -649,6 +659,8 @@ def main():
 
     start_parser = subparsers.add_parser(name='delete', epilog=DISCLAIMER)
     start_parser.add_argument('name', help='name of the jail')
+
+    start_parser = subparsers.add_parser(name='list', epilog=DISCLAIMER)
 
     parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
 
@@ -673,6 +685,9 @@ def main():
 
     elif args.subcommand == 'delete':
         delete_jail(args.name)
+
+    elif args.subcommand == 'list':
+        list_jails()
 
     elif args.subcommand:
         parser.print_usage()
