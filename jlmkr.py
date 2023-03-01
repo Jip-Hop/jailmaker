@@ -4,6 +4,7 @@ import argparse
 import configparser
 import contextlib
 import ctypes
+import glob
 import hashlib
 import os
 import re
@@ -15,7 +16,6 @@ import subprocess
 import sys
 import time
 import urllib.request
-
 from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
@@ -158,35 +158,77 @@ def start_jail(jail_name):
         if os.path.exists('/dev/dri'):
             systemd_nspawn_additional_args.append('--bind=/dev/dri')
 
+        nvidia_devices = glob.glob('/dev/nvidia*')
+
         # Detect nvidia GPU
-        if os.path.exists('/dev/nvidia0'):
-            nvidia_driver_files = []
+        if len(nvidia_devices):
+            nvidia_files = set(nvidia_devices)
 
             try:
-                nvidia_driver_files = subprocess.check_output(
-                    ['nvidia-container-cli', 'list']).decode().split('\n')
+                nvidia_files.update([x for x in subprocess.check_output(
+                    ['nvidia-container-cli', 'list']).decode().split('\n') if x])
             except subprocess.CalledProcessError:
                 eprint(dedent("""
                     Failed to run nvidia-container-cli.
-                    Unable to mount the nvidia driver files."""))
+                    Unable to detect which nvidia driver files to mount.
+                    Falling back to hard-coded list of nvidia files..."""))
 
-            if len(nvidia_driver_files):
-                additional_nvidia_library = '/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1'
-                if os.path.exists(additional_nvidia_library):
-                    # Add libnvidia-ml.so.1
-                    # Not listed by nvidia-container-cli, but required
-                    nvidia_driver_files.append(additional_nvidia_library)
+                for pattern in ["/dev/nvidiactl",
+                                "/dev/nvidia-modeset",
+                                "/dev/nvidia0",
+                                "/usr/lib/nvidia/current/nvidia-smi",
+                                "/usr/bin/nvidia-persistenced",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ml.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-cfg.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libcuda.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ptxjitcompiler.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-ngx.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-encode.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvcuvid.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-eglcore.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-glcore.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-tls.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libGLX_nvidia.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so*"]:
+                    for file_path in glob.glob(pattern):
+                        if os.path.exists(file_path):
+                            nvidia_files.add(file_path)
 
-            for file_path in nvidia_driver_files:
-                if not file_path:
-                    # Skip empty strings
-                    continue
-                elif file_path.startswith('/dev/'):
-                    systemd_nspawn_additional_args.append(
-                        f"--bind={file_path}")
+            # Add libnvidia-ml.so.1 (and possibly other nvidia files) which
+            # are not listed by nvidia-container-cli, but required to run...
+            nvidia_files.update(
+                glob.glob('/usr/lib/x86_64-linux-gnu/*nvidia*'))
+
+            nvidia_mounts = []
+            mounted_nvidia_smi_in_path = False
+
+            for file_path in nvidia_files:
+                if file_path.startswith('/dev/'):
+                    nvidia_mounts.append(f"--bind={file_path}")
                 else:
-                    systemd_nspawn_additional_args.append(
-                        f"--bind-ro={file_path}")
+                    nvidia_mounts.append(f"--bind-ro={file_path}")
+                    if (not mounted_nvidia_smi_in_path and
+                        os.path.basename(file_path) == 'nvidia-smi' and
+                            os.path.normpath(file_path) != os.path.normpath('/usr/bin/nvidia-smi')):
+
+                        # As an alternative to a symlink also bind mount nvidia-smi
+                        # in a directory which is available inside the path
+                        nvidia_mounts.append(
+                            f"--bind-ro={file_path}:/usr/bin/nvidia-smi")
+                        mounted_nvidia_smi_in_path = True
+
+            # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
+            subprocess.run(
+                ['systemd-nspawn',
+                 '--quiet',
+                 f"--machine={jail_name}",
+                 f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
+                 *nvidia_mounts,
+                 "ldconfig"])
+
+            systemd_nspawn_additional_args += nvidia_mounts
 
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
@@ -692,23 +734,21 @@ def main():
 
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, epilog=DISCLAIMER)
+
     parser.add_argument('--version', action='version', version=VERSION)
 
     subparsers = parser.add_subparsers(title='commands', dest='subcommand')
 
-    create_parser = subparsers.add_parser(name='create', epilog=DISCLAIMER)
-    create_parser.add_argument(
+    subparsers.add_parser(name='create', epilog=DISCLAIMER).add_argument(
         'name', nargs='?', help='name of the jail to create')
 
-    start_parser = subparsers.add_parser(name='start', epilog=DISCLAIMER)
-    start_parser.add_argument('name', help='name of the jail to start')
+    subparsers.add_parser(name='start', epilog=DISCLAIMER).add_argument(
+        'name', help='name of the jail to start')
 
-    start_parser = subparsers.add_parser(name='delete', epilog=DISCLAIMER)
-    start_parser.add_argument('name', help='name of the jail to delete')
+    subparsers.add_parser(name='delete', epilog=DISCLAIMER).add_argument(
+        'name', help='name of the jail to delete')
 
-    start_parser = subparsers.add_parser(name='list', epilog=DISCLAIMER)
-
-    parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}"
+    subparsers.add_parser(name='list', epilog=DISCLAIMER)
 
     if os.getuid() != 0:
         parser.print_usage()
