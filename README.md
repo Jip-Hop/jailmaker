@@ -42,25 +42,37 @@ Creating a jail is interactive. You'll be presented with questions which guide y
 
 After answering a few questions you should have your first jail up and running!
 
-## Start Jail
-
-```shell
-./jlmkr.py start myjail
-```
-
 ### Autostart Jail on Boot
 
 In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface.
 
 ## Additional Commands
 
-For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
+### Start Jail
+
+```shell
+./jlmkr.py start myjail
+```
+
+### List Jails
+
+```shell
+./jlmkr.py list
+```
 
 ### Stop Jail
 
 ```shell
 machinectl stop myjail
 ```
+
+### Delete Jail
+
+```shell
+./jlmkr.py delete myjail
+```
+
+For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
 
 ### Jail Shell
 
