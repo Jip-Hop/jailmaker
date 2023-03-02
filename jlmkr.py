@@ -208,7 +208,9 @@ def start_jail(jail_name):
                                 "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ml.so*",
                                 "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ptxjitcompiler.so*"]:
                     for file_path in glob.glob(pattern):
-                        if os.path.exists(file_path):
+                        # Don't mount symlinks matched by list of globs above,
+                        # the symlinks need to be created by ldconfig inside the jail
+                        if os.path.exists(file_path) and not os.path.islink(file_path):
                             nvidia_files.add(file_path)
 
             # Also make nvidia-smi available inside the path
