@@ -150,7 +150,22 @@ def start_jail(jail_name):
             '--system-call-filter=add_key keyctl bpf',
         ]
 
-    if config.get('gpu_passthrough') == '1':
+    ld_so_conf_path = os.path.join(
+        jail_path, JAIL_ROOTFS_NAME, 'etc/ld.so.conf.d/jlmkr-nvidia.conf')
+
+    # TODO: make 2 additional config options:
+    # gpu_passthrough_intel and gpu_passthrough_nvidia
+    # gpu_passthrough == 1 will enable both (as is current behavior)
+    # During create, autodetect intel/nvidia presence and ask to enable passthrough,
+    # else leave them disabled (and write them to the config file)
+    # No longer write gpu_passthrough setting for new jails
+    # Don't ask to enable passthrough in case there are no GPU devices present
+
+    if config.get('gpu_passthrough') != '1':
+        # Try to cleanup ld_so_conf_path
+        if os.path.exists(ld_so_conf_path):
+            os.remove(ld_so_conf_path)
+    else:
         systemd_nspawn_additional_args.append(
             '--property=DeviceAllow=char-drm rw')
 
@@ -173,58 +188,65 @@ def start_jail(jail_name):
                     Unable to detect which nvidia driver files to mount.
                     Falling back to hard-coded list of nvidia files..."""))
 
-                for pattern in ["/dev/nvidiactl",
-                                "/dev/nvidia-modeset",
+                for pattern in ["/dev/nvidia-modeset",
                                 "/dev/nvidia0",
-                                "/usr/lib/nvidia/current/nvidia-smi",
+                                "/dev/nvidiactl",
                                 "/usr/bin/nvidia-persistenced",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ml.so*",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-cfg.so*",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libcuda.so*",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ptxjitcompiler.so*",
-                                "/usr/lib/x86_64-linux-gnu/libnvidia-ngx.so*",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-encode.so*",
-                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvcuvid.so*",
+                                "/usr/lib/nvidia/current/nvidia-smi",
                                 "/usr/lib/x86_64-linux-gnu/libnvidia-eglcore.so*",
                                 "/usr/lib/x86_64-linux-gnu/libnvidia-glcore.so*",
-                                "/usr/lib/x86_64-linux-gnu/libnvidia-tls.so*",
                                 "/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-ngx.so*",
                                 "/usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so*",
+                                "/usr/lib/x86_64-linux-gnu/libnvidia-tls.so*",
                                 "/usr/lib/x86_64-linux-gnu/nvidia/current/libGLX_nvidia.so*",
-                                "/usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so*"]:
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libcuda.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvcuvid.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-cfg.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-encode.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ml.so*",
+                                "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ptxjitcompiler.so*"]:
                     for file_path in glob.glob(pattern):
                         if os.path.exists(file_path):
                             nvidia_files.add(file_path)
 
-            # Add libnvidia-ml.so.1 which is not listed by nvidia-container-cli, but required to run...
-            nvidia_files.add('/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1')
+            # Also make nvidia-smi available inside the path
+            nvidia_files.add('/usr/bin/nvidia-smi')
 
             nvidia_mounts = []
-            mounted_nvidia_smi_in_path = False
 
             for file_path in nvidia_files:
+                if not os.path.exists(file_path):
+                    # Don't try to mount files not present on the host
+                    continue
+
                 if file_path.startswith('/dev/'):
                     nvidia_mounts.append(f"--bind={file_path}")
                 else:
                     nvidia_mounts.append(f"--bind-ro={file_path}")
-                    if (not mounted_nvidia_smi_in_path and
-                        os.path.basename(file_path) == 'nvidia-smi' and
-                            os.path.normpath(file_path) != os.path.normpath('/usr/bin/nvidia-smi')):
 
-                        # As an alternative to a symlink also bind mount nvidia-smi
-                        # in a directory which is available inside the path
-                        nvidia_mounts.append(
-                            f"--bind-ro={file_path}:/usr/bin/nvidia-smi")
-                        mounted_nvidia_smi_in_path = True
+            # Check if the parent dir exists where we want to write our conf file
+            if os.path.exists(os.path.dirname(ld_so_conf_path)):
+                
+                # Only write if the conf file doesn't yet exist or has different contents
+                string_to_write = '/usr/lib/x86_64-linux-gnu/nvidia/current'
+                if not os.path.exists(ld_so_conf_path) or Path(ld_so_conf_path).read_text().strip() != string_to_write:
+                    print(string_to_write, file=open(ld_so_conf_path, 'w'))
 
-            # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
-            subprocess.run(
-                ['systemd-nspawn',
-                 '--quiet',
-                 f"--machine={jail_name}",
-                 f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
-                 *nvidia_mounts,
-                 "ldconfig"])
+                # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
+                subprocess.run(
+                    ['systemd-nspawn',
+                     '--quiet',
+                     f"--machine={jail_name}",
+                     f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
+                     *nvidia_mounts,
+                     "ldconfig"])
+            else:
+                eprint("""
+                    Unable to write the ld.so.conf.d directory inside the jail (it doesn't exist).
+                    Skipping call to ldconfig.
+                    The nvidia drivers will probably not be detected...""")
 
             systemd_nspawn_additional_args += nvidia_mounts
 
