@@ -213,7 +213,8 @@ def start_jail(jail_name):
                         if os.path.exists(file_path) and not os.path.islink(file_path):
                             nvidia_files.add(file_path)
 
-            # Also make nvidia-smi available inside the path
+            # Also make nvidia-smi available inside the path,
+            # once mounted the symlink will be resolved and nvidia-smi will appear as a regular file
             nvidia_files.add('/usr/bin/nvidia-smi')
 
             nvidia_mounts = []
