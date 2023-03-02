@@ -6,9 +6,9 @@ These are notes on advanced networking setup you may want to try. Contributions 
 
 ### Bridge Networking
 
-As an alternative to the default host networking mode, you may want to connect to a bridge interface instead and let the jail obtain its IP address via DHCP.
+As an alternative to the default host networking mode, you may want to connect to a bridge interface instead and let the jail obtain its IP address via DHCP (although you may have to be patient for up to 20 seconds after the jail started for networking to work, [assigning the IP address is somehow slow](https://github.com/Jip-Hop/jailmaker/issues/7)).
 
-TODO: explain how to setup the bridge interface using the TrueNAS web interface. May lock yourself out... May take several tries... TrueNAS is a bit picky when switching IP addresses and toggling DHCP. May be helpful to connect a monitor and keyboard to the NAS and use `/etc/netcli` to reset the networking interface. Kept bothering with "Register Default Gateway" warning... I just clicked Cancel.
+[This YouTube video](https://www.youtube.com/watch?v=7clQw132w58) may be helpful when setting up the bridge interface. Note: You may lock yourself out... It may take several tries... TrueNAS is a bit picky when switching IP addresses and toggling DHCP. May be helpful to connect a monitor and keyboard to the NAS and use `/etc/netcli` to reset the networking interface. Kept bothering with "Register Default Gateway" warning... I just clicked Cancel.
 
 Add the `--network-bridge=br1 --resolv-conf=bind-host` systemd-nspawn flag when asked for `Additional flags` during jail creation, or set it post-creation by [editing](./README.md#edit-jail-config) the `SYSTEMD_NSPAWN_USER_ARGS` variable inside the `config` file.
 
