@@ -196,10 +196,8 @@ def start_jail(jail_name):
                         if os.path.exists(file_path):
                             nvidia_files.add(file_path)
 
-            # Add libnvidia-ml.so.1 (and possibly other nvidia files) which
-            # are not listed by nvidia-container-cli, but required to run...
-            nvidia_files.update(
-                glob.glob('/usr/lib/x86_64-linux-gnu/*nvidia*'))
+            # Add libnvidia-ml.so.1 which is not listed by nvidia-container-cli, but required to run...
+            nvidia_files.add('/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1')
 
             nvidia_mounts = []
             mounted_nvidia_smi_in_path = False
