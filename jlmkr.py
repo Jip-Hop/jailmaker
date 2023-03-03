@@ -18,7 +18,6 @@ import time
 import urllib.request
 from inspect import cleandoc
 from pathlib import Path, PurePath
-from shutil import which
 from textwrap import dedent
 
 # Only set a color if we have an interactive tty
@@ -171,7 +170,6 @@ def start_jail(jail_name):
         if os.path.exists('/dev/dri'):
             systemd_nspawn_additional_args.append('--bind=/dev/dri')
         else:
-            eprint("No intel GPU seems to be present...")
             eprint(dedent("""
             No intel GPU seems to be present...
             Skip passthrough of intel GPU."""))
@@ -190,32 +188,14 @@ def start_jail(jail_name):
             Skip passthrough of nvidia GPU."""))
         else:
             nvidia_files = set(nvidia_devices)
-            fallback = False
 
-            if which('nvidia-container-cli') is None:
+            try:
+                nvidia_files.update([x for x in subprocess.check_output(
+                    ['nvidia-container-cli', 'list']).decode().split('\n') if x])
+            except:
                 eprint(dedent("""
-                Can't run nvidia-container-cli, it appears not to be installed."""))
-                fallback = True
-            else:
-                tries_remaining = 3
-                while tries_remaining:
-                    tries_remaining -= 1
-                    try:
-                        nvidia_files.update([x for x in subprocess.check_output(
-                            ['nvidia-container-cli', 'list']).decode().split('\n') if x])
-                        break
-                    except subprocess.CalledProcessError:
-                        eprint(dedent("""
-                        Failed to run nvidia-container-cli."""))
-                        if tries_remaining:
-                            eprint("Trying again in 10 seconds...")
-                            time.sleep(10)
-                        else:
-                            fallback = True
-
-            if fallback:
-                eprint("Unable to detect which nvidia driver files to mount.")
-                eprint("Falling back to hard-coded list of nvidia files...")
+                Unable to detect which nvidia driver files to mount.
+                Falling back to hard-coded list of nvidia files..."""))
 
                 for pattern in ["/dev/nvidia-modeset",
                                 "/dev/nvidia0",
@@ -275,10 +255,10 @@ def start_jail(jail_name):
                      *nvidia_mounts,
                      "ldconfig"])
             else:
-                eprint("""
+                eprint(dedent("""
                     Unable to write the ld.so.conf.d directory inside the jail (it doesn't exist).
                     Skipping call to ldconfig.
-                    The nvidia drivers will probably not be detected...""")
+                    The nvidia drivers will probably not be detected..."""))
 
             systemd_nspawn_additional_args += nvidia_mounts
 
