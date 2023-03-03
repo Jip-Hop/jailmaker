@@ -60,12 +60,6 @@ In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jai
 ./jlmkr.py list
 ```
 
-### Stop Jail
-
-```shell
-machinectl stop myjail
-```
-
 ### Delete Jail
 
 ```shell
@@ -73,6 +67,12 @@ machinectl stop myjail
 ```
 
 For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
+
+### Stop Jail
+
+```shell
+machinectl stop myjail
+```
 
 ### Jail Shell
 
