@@ -18,6 +18,7 @@ import time
 import urllib.request
 from inspect import cleandoc
 from pathlib import Path, PurePath
+from shutil import which
 from textwrap import dedent
 
 # Only set a color if we have an interactive tty
@@ -153,40 +154,68 @@ def start_jail(jail_name):
     ld_so_conf_path = os.path.join(
         jail_path, JAIL_ROOTFS_NAME, 'etc/ld.so.conf.d/jlmkr-nvidia.conf')
 
-    # TODO: make 2 additional config options:
-    # gpu_passthrough_intel and gpu_passthrough_nvidia
-    # gpu_passthrough == 1 will enable both (as is current behavior)
-    # During create, autodetect intel/nvidia presence and ask to enable passthrough,
-    # else leave them disabled (and write them to the config file)
-    # No longer write gpu_passthrough setting for new jails
-    # Don't ask to enable passthrough in case there are no GPU devices present
+    # Legacy gpu_passthrough config setting
+    if config.get('gpu_passthrough') == '1':
+        gpu_passthrough_intel = '1'
+        gpu_passthrough_nvidia = '1'
+    else:
+        gpu_passthrough_intel = config.get('gpu_passthrough_intel')
+        gpu_passthrough_nvidia = config.get('gpu_passthrough_nvidia')
 
-    if config.get('gpu_passthrough') != '1':
+    if gpu_passthrough_intel == '1' or gpu_passthrough_nvidia == '1':
+        systemd_nspawn_additional_args.append(
+            '--property=DeviceAllow=char-drm rw')
+
+    if gpu_passthrough_intel == '1':
+        # Detect intel GPU device and if present add bind flag
+        if os.path.exists('/dev/dri'):
+            systemd_nspawn_additional_args.append('--bind=/dev/dri')
+        else:
+            eprint("No intel GPU seems to be present...")
+            eprint(dedent("""
+            No intel GPU seems to be present...
+            Skip passthrough of intel GPU."""))
+
+    if gpu_passthrough_nvidia != '1':
         # Try to cleanup ld_so_conf_path
         if os.path.exists(ld_so_conf_path):
             os.remove(ld_so_conf_path)
     else:
-        systemd_nspawn_additional_args.append(
-            '--property=DeviceAllow=char-drm rw')
-
-        # Detect intel GPU device and if present add bind flag
-        if os.path.exists('/dev/dri'):
-            systemd_nspawn_additional_args.append('--bind=/dev/dri')
-
         nvidia_devices = glob.glob('/dev/nvidia*')
 
         # Detect nvidia GPU
-        if len(nvidia_devices):
+        if not len(nvidia_devices):
+            eprint(dedent("""
+            No nvidia GPU seems to be present...
+            Skip passthrough of nvidia GPU."""))
+        else:
             nvidia_files = set(nvidia_devices)
+            fallback = False
 
-            try:
-                nvidia_files.update([x for x in subprocess.check_output(
-                    ['nvidia-container-cli', 'list']).decode().split('\n') if x])
-            except subprocess.CalledProcessError:
+            if which('nvidia-container-cli') is None:
                 eprint(dedent("""
-                    Failed to run nvidia-container-cli.
-                    Unable to detect which nvidia driver files to mount.
-                    Falling back to hard-coded list of nvidia files..."""))
+                Can't run nvidia-container-cli, it appears not to be installed."""))
+                fallback = True
+            else:
+                tries_remaining = 3
+                while tries_remaining:
+                    tries_remaining -= 1
+                    try:
+                        nvidia_files.update([x for x in subprocess.check_output(
+                            ['nvidia-container-cli', 'list']).decode().split('\n') if x])
+                        break
+                    except subprocess.CalledProcessError:
+                        eprint(dedent("""
+                        Failed to run nvidia-container-cli."""))
+                        if tries_remaining:
+                            eprint("Trying again in 10 seconds...")
+                            time.sleep(10)
+                        else:
+                            fallback = True
+
+            if fallback:
+                eprint("Unable to detect which nvidia driver files to mount.")
+                eprint("Falling back to hard-coded list of nvidia files...")
 
                 for pattern in ["/dev/nvidia-modeset",
                                 "/dev/nvidia0",
@@ -231,7 +260,7 @@ def start_jail(jail_name):
 
             # Check if the parent dir exists where we want to write our conf file
             if os.path.exists(os.path.dirname(ld_so_conf_path)):
-                
+
                 # Only write if the conf file doesn't yet exist or has different contents
                 string_to_write = '/usr/lib/x86_64-linux-gnu/nvidia/current'
                 if not os.path.exists(ld_so_conf_path) or Path(ld_so_conf_path).read_text().strip() != string_to_write:
@@ -499,10 +528,19 @@ def create_jail(jail_name):
 
         print()
 
-        gpu_passthrough = 0
+        gpu_passthrough_intel = 0
 
-        if agree('Give access to the GPU inside the jail?', 'n'):
-            gpu_passthrough = 1
+        if os.path.exists('/dev/dri'):
+            print("Detected the presence of an intel GPU.")
+            if agree('Passthrough the intel GPU?', 'n'):
+                gpu_passthrough_intel = 1
+
+        gpu_passthrough_nvidia = 0
+
+        if len(glob.glob('/dev/nvidia*')):
+            print("Detected the presence of an nvidia GPU.")
+            if agree('Passthrough the nvidia GPU?', 'n'):
+                gpu_passthrough_nvidia = 1
 
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: CHECK SYNTAX{NORMAL}
@@ -689,7 +727,8 @@ def create_jail(jail_name):
 
         config = cleandoc(f"""
             docker_compatible={docker_compatible}
-            gpu_passthrough={gpu_passthrough}
+            gpu_passthrough_intel={gpu_passthrough_intel}
+            gpu_passthrough_nvidia={gpu_passthrough_nvidia}
             systemd_nspawn_user_args={systemd_nspawn_user_args}
             # You generally will not need to change the options below
             systemd_run_default_args={' '.join(systemd_run_default_args)}
