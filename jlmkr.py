@@ -35,7 +35,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
 
-VERSION = '0.0.0'
+VERSION = '0.0.1'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -87,25 +87,18 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
             os.remove(ld_so_conf_path)
         return
 
-    # Detect nvidia GPU
-    if not len(glob.glob('/dev/nvidia*')):
-        eprint(dedent("""
-        No nvidia GPU seems to be present...
-        Skip passthrough of nvidia GPU."""))
-        return
-
     if not os.path.exists('/dev/nvidia-uvm'):
         # Create the nvidia device files: /dev/nvidia*
-        for command in (
-            ['modprobe', 'nvidia-current-uvm'],
-            ['nvidia-modprobe', '-c0', '-u'],
-        ):
-            try:
-                subprocess.run(command, check=True)
-            except:
-                eprint("Skip passthrough of nvidia GPU.")
-                return
+        try:
+            # TODO: does nvidia-smi work on post-init?
+            # Or do we need to explicitly call modprobe?
+            subprocess.run(['nvidia-smi', '-f', '/dev/null'], check=True)
+        except:
+            eprint("Skip passthrough of nvidia GPU.")
+            return
 
+    # TODO: do we really need all /dev/nvidia* devices?
+    # Perhaps starting with an empty set would be enough
     nvidia_files = set(glob.glob('/dev/nvidia*'))
     try:
         nvidia_files.update([x for x in subprocess.check_output(
@@ -538,7 +531,13 @@ def create_jail(jail_name):
 
         gpu_passthrough_nvidia = 0
 
-        if len(glob.glob('/dev/nvidia*')):
+        try:
+            subprocess.run(['nvidia-smi'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            nvidia_detected = True
+        except:
+            nvidia_detected = False
+
+        if nvidia_detected:
             print("Detected the presence of an nvidia GPU.")
             if agree('Passthrough the nvidia GPU?', 'n'):
                 gpu_passthrough_nvidia = 1
