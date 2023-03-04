@@ -4,7 +4,6 @@ import argparse
 import configparser
 import contextlib
 import ctypes
-import glob
 import hashlib
 import os
 import re
@@ -35,7 +34,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -87,54 +86,27 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
             os.remove(ld_so_conf_path)
         return
 
-    if not os.path.exists('/dev/nvidia-uvm'):
-        # Create the nvidia device files: /dev/nvidia*
-        try:
-            # TODO: does nvidia-smi work on post-init?
-            # Or do we need to explicitly call modprobe?
-            subprocess.run(['nvidia-smi', '-f', '/dev/null'], check=True)
-        except:
-            eprint("Skip passthrough of nvidia GPU.")
-            return
-
-    # TODO: do we really need all /dev/nvidia* devices?
-    # Perhaps starting with an empty set would be enough
-    nvidia_files = set(glob.glob('/dev/nvidia*'))
     try:
-        nvidia_files.update([x for x in subprocess.check_output(
-            ['nvidia-container-cli', 'list']).decode().split('\n') if x])
+        # Run nvidia-smi to initialize the nvidia driver
+        # If we can't run nvidia-smi successfully,
+        # then nvidia-container-cli list will fail too:
+        # we shouldn't continue with gpu passthrough
+        subprocess.run(['nvidia-smi', '-f', '/dev/null'], check=True)
+    except:
+        eprint("Skip passthrough of nvidia GPU.")
+        return
+
+    try:
+        nvidia_files = set(([x for x in subprocess.check_output(
+            ['nvidia-container-cli', 'list']).decode().split('\n') if x]))
     except:
         eprint(dedent("""
         Unable to detect which nvidia driver files to mount.
-        Falling back to hard-coded list of nvidia files..."""))
-
-        for pattern in ["/dev/nvidia-modeset",
-                        "/dev/nvidia0",
-                        "/dev/nvidiactl",
-                        "/usr/bin/nvidia-persistenced",
-                        "/usr/lib/nvidia/current/nvidia-smi",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-eglcore.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-glcore.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-ngx.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so*",
-                        "/usr/lib/x86_64-linux-gnu/libnvidia-tls.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libGLX_nvidia.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libcuda.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvcuvid.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-cfg.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-encode.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ml.so*",
-                        "/usr/lib/x86_64-linux-gnu/nvidia/current/libnvidia-ptxjitcompiler.so*"]:
-            for file_path in glob.glob(pattern):
-                # Don't mount symlinks matched by list of globs above,
-                # the symlinks need to be created by ldconfig inside the jail
-                if os.path.exists(file_path) and not os.path.islink(file_path):
-                    nvidia_files.add(file_path)
+        Skip passthrough of nvidia GPU."""))
+        return
 
     # Also make nvidia-smi available inside the path,
-    # once mounted the symlink will be resolved and nvidia-smi will appear as a regular file
+    # while mounting the symlink will be resolved and nvidia-smi will appear as a regular file
     nvidia_files.add('/usr/bin/nvidia-smi')
 
     nvidia_mounts = []
@@ -142,6 +114,7 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     for file_path in nvidia_files:
         if not os.path.exists(file_path):
             # Don't try to mount files not present on the host
+            print(f"Skipped mounting {file_path}, it doesn't exist on the host...")
             continue
 
         if file_path.startswith('/dev/'):
@@ -525,20 +498,21 @@ def create_jail(jail_name):
         gpu_passthrough_intel = 0
 
         if os.path.exists('/dev/dri'):
-            print("Detected the presence of an intel GPU.")
+            print("Detected the presence of an intel GPU.\n")
             if agree('Passthrough the intel GPU?', 'n'):
                 gpu_passthrough_intel = 1
 
         gpu_passthrough_nvidia = 0
 
         try:
-            subprocess.run(['nvidia-smi'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['nvidia-smi'], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             nvidia_detected = True
         except:
             nvidia_detected = False
 
         if nvidia_detected:
-            print("Detected the presence of an nvidia GPU.")
+            print("Detected the presence of an nvidia GPU.\n")
             if agree('Passthrough the nvidia GPU?', 'n'):
                 gpu_passthrough_nvidia = 1
 
