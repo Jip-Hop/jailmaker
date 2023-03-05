@@ -34,7 +34,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -77,13 +77,11 @@ def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
 
 
 def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_path, jail_name):
-    ld_so_conf_path = os.path.join(
-        jail_path, JAIL_ROOTFS_NAME, 'etc/ld.so.conf.d/jlmkr-nvidia.conf')
+    ld_so_conf_path = Path(jail_path) / JAIL_ROOTFS_NAME / 'etc/ld.so.conf.d/jlmkr-nvidia.conf'
 
     if gpu_passthrough_nvidia != '1':
-        if os.path.exists(ld_so_conf_path):
-            # Cleanup the config file we made when passthrough was enabled
-            os.remove(ld_so_conf_path)
+        # Cleanup the config file we made when passthrough was enabled
+        ld_so_conf_path.remove(missing_ok=True)
         return
 
     try:
@@ -123,21 +121,27 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
             nvidia_mounts.append(f"--bind-ro={file_path}")
 
     # Check if the parent dir exists where we want to write our conf file
-    if os.path.exists(os.path.dirname(ld_so_conf_path)):
+    if ld_so_conf_path.parent.exists():
+        nvidia_libraries = set(Path(x) for x in subprocess.check_output(
+            ['nvidia-container-cli', 'list', '--libraries']).decode().split('\n') if x)
+        library_folders = set(str(x.parent) for x in nvidia_libraries)
 
         # Only write if the conf file doesn't yet exist or has different contents
-        ld_so_conf = '/usr/lib/x86_64-linux-gnu/nvidia/current'
-        if not os.path.exists(ld_so_conf_path) or Path(ld_so_conf_path).read_text().strip() != ld_so_conf:
-            print(ld_so_conf, file=open(ld_so_conf_path, 'w'))
+        existing_conf_libraries = set()
+        if ld_so_conf_path.exists():
+            existing_conf_libraries.update(x for x in ld_so_conf_path.read_text().splitlines() if x)
 
-        # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
-        subprocess.run(
-            ['systemd-nspawn',
-                '--quiet',
-                f"--machine={jail_name}",
-                f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
-                *nvidia_mounts,
-                "ldconfig"])
+        if library_folders != existing_conf_libraries:
+            print("\n".join(x for x in library_folders), file=ld_so_conf_path.open('w'))
+
+            # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
+            subprocess.run(
+                ['systemd-nspawn',
+                    '--quiet',
+                    f"--machine={jail_name}",
+                    f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
+                    *nvidia_mounts,
+                    "ldconfig"])
     else:
         eprint(dedent("""
             Unable to write the ld.so.conf.d directory inside the jail (it doesn't exist).
