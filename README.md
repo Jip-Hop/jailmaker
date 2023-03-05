@@ -17,7 +17,7 @@ TrueNAS SCALE already has everything onboard to create persistent Linux 'jails' 
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 11 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Optional: configuring the jail so you can run Docker inside it
-- Optional: GPU passthrough (including nvidia GPU with the drivers bind mounted from the host)
+- Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
 - Starting the jail with your config applied
 
 ## Installation
@@ -113,6 +113,16 @@ See [Advanced Networking](./NETWORKING.md) for more.
 ## Docker
 
 Jailmaker won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
+
+## Nvidia GPU
+
+To make passthrough of the nvidia GPU work, you need to schedule a Pre Init command. The reason is that TrueNAS SCALE by default doesn't load the nvidia kernel modules (and jailmaker doesn't do that either).
+
+```
+[ ! -f /dev/nvidia-uvm ] && modprobe nvidia-current-uvm && /usr/bin/nvidia-modprobe -c0 -u
+```
+
+![Pre Init config screenshot](https://user-images.githubusercontent.com/1704047/222915803-d6dd51b0-c4dd-4189-84be-a04d38cca0b3.png)
 
 ## Comparison
 
