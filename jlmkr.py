@@ -34,7 +34,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
 
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -727,9 +727,9 @@ def create_jail(jail_name):
         start_jail(jail_name)
 
 
-def delete_jail(jail_name):
+def remove_jail(jail_name):
     """
-    Delete jail with given name.
+    Remove jail with given name.
     """
 
     if check_jail_name_valid(jail_name):
@@ -785,8 +785,8 @@ def main():
     subparsers.add_parser(name='start', epilog=DISCLAIMER).add_argument(
         'name', help='name of the jail to start')
 
-    subparsers.add_parser(name='delete', epilog=DISCLAIMER).add_argument(
-        'name', help='name of the jail to delete')
+    subparsers.add_parser(name='remove', epilog=DISCLAIMER).add_argument(
+        'name', help='name of the jail to remove')
 
     subparsers.add_parser(name='list', epilog=DISCLAIMER)
 
@@ -809,8 +809,8 @@ def main():
     elif args.subcommand == 'create':
         create_jail(args.name)
 
-    elif args.subcommand == 'delete':
-        delete_jail(args.name)
+    elif args.subcommand == 'remove':
+        remove_jail(args.name)
 
     elif args.subcommand == 'list':
         list_jails()
