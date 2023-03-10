@@ -81,7 +81,7 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
 
     if gpu_passthrough_nvidia != '1':
         # Cleanup the config file we made when passthrough was enabled
-        ld_so_conf_path.remove(missing_ok=True)
+        ld_so_conf_path.unlink(missing_ok=True)
         return
 
     try:
