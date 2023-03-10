@@ -743,6 +743,7 @@ def remove_jail(jail_name):
                 print(f"\nTrying to stop {jail_name} if it was running...")
                 subprocess.run(['machinectl', 'stop', jail_name])
                 # Need to sleep since deleting immediately after stop causes problems...
+                # TODO: actually wait until the jail has completely stopped... shutdown may take more than 1s
                 time.sleep(1)
                 print(f"Cleaning up: {jail_path}")
                 shutil.rmtree(jail_path)
