@@ -14,6 +14,26 @@ Add the `--network-bridge=br1 --resolv-conf=bind-host` systemd-nspawn flag when 
 
 The TrueNAS host and the jail will be able to communicate with each other as if the jail was just another device on the LAN. It will use the same DNS servers as the TrueNAS host because the `--resolv-conf=bind-host` option bind mounts the `/etc/resolv.conf` file from the host inside the jail. If you want to use the DNS servers advertised via DHCP, then check [DNS via DHCP](#dns-via-dhcp).
 
+To configure a **static IP** with our bridge interface, we need to edit the `80-container-host0.network` file located in `/etc/systemd/network`. Change the `[Network]` section to look like this:
+
+```ini
+[Network]
+DHCP=false
+Address=192.168.0.12/24
+Gateway=192.168.0.1
+LinkLocalAddressing=no
+LLDP=yes
+EmitLLDP=customer-bridge
+```
+Then restart the `systemd-networkd` service and check your network configuration.
+
+```shell
+systemctl restart systemd-networkd
+systemctl status systemd-networkd
+ifconfig
+```
+
+
 ### Macvlan Networking
 
 To setup Macvlan Networking you may follow the [Bridge Networking](#bridge-networking) section, but skip the setup of a bridge interface and use these flags instead: `--network-macvlan=eno1 --resolv-conf=bind-host`. By default the TrueNAS host and jail will not be able to communicate with each other via the network if Macvlan Networking mode is used. If that's required it would be better to use [Bridge Networking](#bridge-networking).
