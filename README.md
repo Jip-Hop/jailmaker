@@ -44,6 +44,15 @@ Creating a jail is interactive. You'll be presented with questions which guide y
 
 After answering a few questions you should have your first jail up and running!
 
+## Create Command Alias
+
+Instead of having to cd and call the 'jlmkr.py' script you can utilise the native Linux command alias to essentially create a custom pseudo-command that you can call anywhere.
+
+ ```
+alias jailmaker="/mnt/mypool/jailmaker/jlmkr.py"
+```
+This will allow you to run commands such as `jailmaker list` as a shorthand for `/mnt/mypool/jailmaker/jlmkr.py list`
+
 ### Autostart Jail on Boot
 
 In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface.
