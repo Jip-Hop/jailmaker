@@ -44,7 +44,7 @@ Creating a jail is interactive. You'll be presented with questions which guide y
 
 After answering a few questions you should have your first jail up and running!
 
-## Create Command Alias
+### Create Command Alias
 
 Instead of having to cd and call the 'jlmkr.py' script you can utilise the native Linux command alias to essentially create a custom pseudo-command that you can call anywhere.
 
