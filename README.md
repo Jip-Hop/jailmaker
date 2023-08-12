@@ -34,6 +34,16 @@ chmod +x jlmkr.py
 
 The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE.
 
+## Install Jailmaker Dependencies
+
+Unfortunately since version 22.12.3 TrueNAS SCALE no longer includes systemd-nspawn. In order to use jailmaker, we need to first install systemd-nspawn using the command below.
+
+```shell
+./jlmkr.py install
+```
+
+We need to do this again after each update of TrueNAS SCALE. So it is recommended to schedule this command as Post Init Script (see [Autostart Jail on Boot](#autostart-jail-on-boot)).
+
 ## Create Jail
 
 Creating a jail is interactive. You'll be presented with questions which guide you through the process.
@@ -46,7 +56,7 @@ After answering a few questions you should have your first jail up and running!
 
 ### Autostart Jail on Boot
 
-In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface.
+In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && /mnt/mypool/jailmaker/jlmkr.py start myjail`.
 
 ## Additional Commands
 
@@ -127,8 +137,6 @@ To make passthrough of the nvidia GPU work, you need to schedule a Pre Init comm
 ## Comparison
 
 TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Docker (on the host).
-
-## Known Issues
 
 ### Incompatible Distros
 

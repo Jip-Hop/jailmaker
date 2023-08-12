@@ -4,6 +4,7 @@ import argparse
 import configparser
 import contextlib
 import ctypes
+import glob
 import hashlib
 import os
 import re
@@ -32,9 +33,9 @@ DISCLAIMER = f"""{YELLOW}{BOLD}USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
-    via bind mounts, without modifying the host OS thanks to systemd-nspawn!"
+    via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.4'
+VERSION = '0.0.5'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -768,6 +769,33 @@ def list_jails():
     print("\nCurrently running:\n")
     subprocess.run(['machinectl', 'list'])
 
+def install_jailmaker_dependencies():
+    # Check if command exists in path
+    if shutil.which('systemd-nspawn'):
+        print("systemd-nspawn is already installed.")
+        return
+    
+    print("Installing jailmaker dependencies...")
+
+    original_permissions = {}
+
+    print("Temporarily enable apt and dpkg (if not already enabled) to install systemd-nspawn.")
+
+    # Make /bin/apt* and /bin/dpkg* files executable
+    for file in (glob.glob('/bin/apt*') + (glob.glob('/bin/dpkg*'))):
+        original_permissions[file] = os.stat(file).st_mode
+        stat_chmod(file, 0o755)
+
+    subprocess.run(['apt-get', 'update'], check=True)
+    subprocess.run(['apt-get', 'install', '-y', 'systemd-container'], check=True)
+
+    # Restore original permissions
+    print("Restore permissions of apt and dpkg.")
+
+    for file, original_permission in original_permissions.items():
+        stat_chmod(file, original_permission)
+
+    print("Done installing jailmaker dependencies.")
 
 def main():
     if os.stat(__file__).st_uid != 0:
@@ -790,6 +818,8 @@ def main():
         'name', help='name of the jail to remove')
 
     subparsers.add_parser(name='list', epilog=DISCLAIMER)
+
+    subparsers.add_parser(name='install', epilog=DISCLAIMER, help="Install jailmaker dependencies")
 
     if os.getuid() != 0:
         parser.print_usage()
@@ -815,6 +845,9 @@ def main():
 
     elif args.subcommand == 'list':
         list_jails()
+
+    elif args.subcommand == 'install':
+        install_jailmaker_dependencies()
 
     elif args.subcommand:
         parser.print_usage()
