@@ -35,7 +35,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -770,33 +770,44 @@ def list_jails():
     print("\nCurrently running:\n")
     subprocess.run(['machinectl', 'list'])
 
-def install_jailmaker_dependencies():
+def install_jailmaker():
     # Check if command exists in path
     if shutil.which('systemd-nspawn'):
         print("systemd-nspawn is already installed.")
-        return
+    else:    
+        print("Installing jailmaker dependencies...")
+
+        original_permissions = {}
+
+        print("Temporarily enable apt and dpkg (if not already enabled) to install systemd-nspawn.")
+
+        # Make /bin/apt* and /bin/dpkg* files executable
+        for file in (glob.glob('/bin/apt*') + (glob.glob('/bin/dpkg*'))):
+            original_permissions[file] = os.stat(file).st_mode
+            stat_chmod(file, 0o755)
+
+        subprocess.run(['apt-get', 'update'], check=True)
+        subprocess.run(['apt-get', 'install', '-y', 'systemd-container'], check=True)
+
+        # Restore original permissions
+        print("Restore permissions of apt and dpkg.")
+
+        for file, original_permission in original_permissions.items():
+            stat_chmod(file, original_permission)
     
-    print("Installing jailmaker dependencies...")
+    target = '/usr/bin/jlmkr'
 
-    original_permissions = {}
+    # Check if command exists in path
+    if shutil.which('jlmkr'):
+        print("The jlmkr command is available.")
+    elif not os.path.lexists(target):
+        print(f"Creating symlink {target} to {SCRIPT_PATH}.")
+        os.symlink(SCRIPT_PATH, target)
+    else:
+        print(f"File {target} already exists... Maybe it's a broken symlink from a previous install attempt?")
+        print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
 
-    print("Temporarily enable apt and dpkg (if not already enabled) to install systemd-nspawn.")
-
-    # Make /bin/apt* and /bin/dpkg* files executable
-    for file in (glob.glob('/bin/apt*') + (glob.glob('/bin/dpkg*'))):
-        original_permissions[file] = os.stat(file).st_mode
-        stat_chmod(file, 0o755)
-
-    subprocess.run(['apt-get', 'update'], check=True)
-    subprocess.run(['apt-get', 'install', '-y', 'systemd-container'], check=True)
-
-    # Restore original permissions
-    print("Restore permissions of apt and dpkg.")
-
-    for file, original_permission in original_permissions.items():
-        stat_chmod(file, original_permission)
-
-    print("Done installing jailmaker dependencies.")
+    print("Done installing jailmaker.")
 
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
@@ -820,7 +831,7 @@ def main():
 
     subparsers.add_parser(name='list', epilog=DISCLAIMER)
 
-    subparsers.add_parser(name='install', epilog=DISCLAIMER, help="Install jailmaker dependencies")
+    subparsers.add_parser(name='install', epilog=DISCLAIMER, help="Install jailmaker dependencies and create symlink")
 
     if os.getuid() != 0:
         parser.print_usage()
@@ -848,7 +859,7 @@ def main():
         list_jails()
 
     elif args.subcommand == 'install':
-        install_jailmaker_dependencies()
+        install_jailmaker()
 
     elif args.subcommand:
         parser.print_usage()

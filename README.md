@@ -30,7 +30,7 @@ chmod +x jlmkr.py
 
 The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE.
 
-## Install Jailmaker Dependencies
+### Install Jailmaker Dependencies
 
 Unfortunately since version 22.12.3 TrueNAS SCALE no longer includes systemd-nspawn. In order to use jailmaker, we need to first install systemd-nspawn using the command below.
 
@@ -40,38 +40,40 @@ Unfortunately since version 22.12.3 TrueNAS SCALE no longer includes systemd-nsp
 
 We need to do this again after each update of TrueNAS SCALE. So it is recommended to schedule this command as Post Init Script (see [Autostart Jail on Boot](#autostart-jail-on-boot)).
 
+Additionally the install command will create a symlink from `/usr/bin/jlmkr` to `jlmkr.py`. Thanks this this you can now run the `jlmkr` command from anywhere (instead of having to run `./jlmkr.py` from inside the directory where you've placed it).
+
 ## Create Jail
 
 Creating a jail is interactive. You'll be presented with questions which guide you through the process.
 
 ```shell
-./jlmkr.py create myjail
+jlmkr create myjail
 ```
 
 After answering a few questions you should have your first jail up and running!
 
 ### Autostart Jail on Boot
 
-In order to start a jail automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && /mnt/mypool/jailmaker/jlmkr.py start myjail`.
+In order to start a jail automatically after TrueNAS boots, run `jlmkr start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && jlmkr start myjail`.
 
 ## Additional Commands
 
 ### Start Jail
 
 ```shell
-./jlmkr.py start myjail
+jlmkr start myjail
 ```
 
 ### List Jails
 
 ```shell
-./jlmkr.py list
+jlmkr list
 ```
 
 ### Remove Jail
 
 ```shell
-./jlmkr.py remove myjail
+jlmkr remove myjail
 ```
 
 For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
@@ -110,7 +112,7 @@ systemd-run --machine myjail --quiet --pipe --wait --collect --service-type=exec
 
 ## Edit Jail Config
 
-Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `./jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr.py` for these changes to take effect.
+Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
 ## Networking
 
