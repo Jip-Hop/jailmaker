@@ -35,14 +35,15 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
 JAIL_ROOTFS_NAME = 'rootfs'
 DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4'
-SCRIPT_NAME = os.path.basename(__file__)
-SCRIPT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
+SCRIPT_PATH = os.path.realpath(__file__)
+SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
+SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 
 
 def eprint(*args, **kwargs):
@@ -798,8 +799,8 @@ def install_jailmaker_dependencies():
     print("Done installing jailmaker dependencies.")
 
 def main():
-    if os.stat(__file__).st_uid != 0:
-        fail("This script should be owned by the root user...")
+    if os.stat(SCRIPT_PATH).st_uid != 0:
+        fail(f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`.")
 
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, epilog=DISCLAIMER)
