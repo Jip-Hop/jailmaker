@@ -831,7 +831,7 @@ def install_jailmaker():
         for file, original_permission in original_permissions.items():
             stat_chmod(file, original_permission)
 
-    target = '/usr/bin/jlmkr'
+    target = '/usr/local/sbin/jlmkr'
 
     # Check if command exists in path
     if shutil.which('jlmkr'):

@@ -40,7 +40,7 @@ Unfortunately since version 22.12.3 TrueNAS SCALE no longer includes systemd-nsp
 
 We need to do this again after each update of TrueNAS SCALE. So it is recommended to schedule this command as Post Init Script (see [Autostart Jail on Boot](#autostart-jail-on-boot)).
 
-Additionally the install command will create a symlink from `/usr/bin/jlmkr` to `jlmkr.py`. Thanks this this you can now run the `jlmkr` command from anywhere (instead of having to run `./jlmkr.py` from inside the directory where you've placed it).
+Additionally the install command will create a symlink from `/usr/local/sbin/jlmkr` to `jlmkr.py`. Thanks this this you can now run the `jlmkr` command from anywhere (instead of having to run `./jlmkr.py` from inside the directory where you've placed it).
 
 ## Create Jail
 
