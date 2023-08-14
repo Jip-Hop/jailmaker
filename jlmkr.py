@@ -35,7 +35,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.8'
+VERSION = '0.0.9'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -742,6 +742,11 @@ def create_jail(jail_name):
         start_jail(jail_name)
 
 
+def jail_is_running(jail_name):
+    return subprocess.run(["machinectl", "show", jail_name], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode == 0
+
+
 def edit_jail(jail_name):
     """
     Edit jail with given name.
@@ -751,7 +756,8 @@ def edit_jail(jail_name):
             eprint(f"A jail with name {jail_name} does not exist.")
         else:
             os.system(f'nano {get_jail_config_path(jail_name)}')
-            print("Restart the jail for edits to apply (if you made any).")
+            if jail_is_running(jail_name):
+                print("Restart the jail for edits to apply (if you made any).")
 
 
 def remove_jail(jail_name):
@@ -767,12 +773,15 @@ def remove_jail(jail_name):
                 f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n') or ""
             if check == jail_name:
                 jail_path = get_jail_path(jail_name)
-                print(f"\nTrying to stop {jail_name} if it was running...")
-                subprocess.run(['machinectl', 'stop', jail_name])
-                # Need to sleep since deleting immediately after stop causes problems...
-                # TODO: actually wait until the jail has completely stopped... shutdown may take more than 1s
-                time.sleep(1)
-                print(f"Cleaning up: {jail_path}")
+                if jail_is_running(jail_name):
+                    print(f"\nWait for {jail_name} to stop...", end="")
+                    subprocess.run(['machinectl', 'stop', jail_name])
+                    # Need to sleep since deleting immediately after stop causes problems...
+                    while jail_is_running(jail_name):
+                        time.sleep(1)
+                        print(".", end="", flush=True)
+
+                print(f"\nCleaning up: {jail_path}")
                 shutil.rmtree(jail_path)
             else:
                 eprint("Wrong name, nothing happened.")
