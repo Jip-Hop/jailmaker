@@ -70,6 +70,14 @@ jlmkr start myjail
 jlmkr list
 ```
 
+### Edit Jail Config
+
+```shell
+jlmkr edit myjail
+```
+
+Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file, e.g. using the `jlmkr edit myjail` command (which uses the nano text editor). You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
+
 ### Remove Jail
 
 ```shell
@@ -109,10 +117,6 @@ If you want to run a command inside a jail, for example from a shell script or a
 ```
 systemd-run --machine myjail --quiet --pipe --wait --collect --service-type=exec env
 ```
-
-## Edit Jail Config
-
-Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file. You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
 ## Networking
 

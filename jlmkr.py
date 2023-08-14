@@ -35,7 +35,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.7'
+VERSION = '0.0.8'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -65,6 +65,14 @@ def get_jail_path(jail_name):
     return os.path.join(JAILS_DIR_PATH, jail_name)
 
 
+def get_jail_config_path(jail_name):
+    return os.path.join(get_jail_path(jail_name), JAIL_CONFIG_NAME)
+
+
+def get_jail_rootfs_path(jail_name):
+    return os.path.join(get_jail_path(jail_name), JAIL_ROOTFS_NAME)
+
+
 def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
     if gpu_passthrough_intel != '1':
         return
@@ -78,8 +86,10 @@ def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
     systemd_nspawn_additional_args.append('--bind=/dev/dri')
 
 
-def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_path, jail_name):
-    ld_so_conf_path = Path(jail_path) / JAIL_ROOTFS_NAME / 'etc/ld.so.conf.d/jlmkr-nvidia.conf'
+def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_name):
+    jail_rootfs_path = get_jail_rootfs_path(jail_name)
+    ld_so_conf_path = Path(os.path.join(jail_rootfs_path),
+                           'etc/ld.so.conf.d/jlmkr-nvidia.conf')
 
     if gpu_passthrough_nvidia != '1':
         # Cleanup the config file we made when passthrough was enabled
@@ -114,7 +124,8 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     for file_path in nvidia_files:
         if not os.path.exists(file_path):
             # Don't try to mount files not present on the host
-            print(f"Skipped mounting {file_path}, it doesn't exist on the host...")
+            print(
+                f"Skipped mounting {file_path}, it doesn't exist on the host...")
             continue
 
         if file_path.startswith('/dev/'):
@@ -131,17 +142,19 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
         # Only write if the conf file doesn't yet exist or has different contents
         existing_conf_libraries = set()
         if ld_so_conf_path.exists():
-            existing_conf_libraries.update(x for x in ld_so_conf_path.read_text().splitlines() if x)
+            existing_conf_libraries.update(
+                x for x in ld_so_conf_path.read_text().splitlines() if x)
 
         if library_folders != existing_conf_libraries:
-            print("\n".join(x for x in library_folders), file=ld_so_conf_path.open('w'))
+            print("\n".join(x for x in library_folders),
+                  file=ld_so_conf_path.open('w'))
 
             # Run ldconfig inside systemd-nspawn jail with nvidia mounts...
             subprocess.run(
                 ['systemd-nspawn',
                     '--quiet',
                     f"--machine={jail_name}",
-                    f"--directory={os.path.join(jail_path, JAIL_ROOTFS_NAME)}",
+                    f"--directory={jail_rootfs_path}",
                     *nvidia_mounts,
                     "ldconfig"])
     else:
@@ -159,7 +172,7 @@ def start_jail(jail_name):
     """
 
     jail_path = get_jail_path(jail_name)
-    jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
+    jail_config_path = get_jail_config_path(jail_name)
 
     config = configparser.ConfigParser()
     try:
@@ -253,7 +266,7 @@ def start_jail(jail_name):
 
     passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args)
     passthrough_nvidia(gpu_passthrough_nvidia,
-                       systemd_nspawn_additional_args, jail_path, jail_name)
+                       systemd_nspawn_additional_args, jail_name)
 
     cmd = ['systemd-run',
            *shlex.split(config.get('systemd_run_default_args', '')),
@@ -573,8 +586,8 @@ def create_jail(jail_name):
         readline.parse_and_bind('tab: self-insert')
         print()
 
-        jail_config_path = os.path.join(jail_path, JAIL_CONFIG_NAME)
-        jail_rootfs_path = os.path.join(jail_path, JAIL_ROOTFS_NAME)
+        jail_config_path = get_jail_config_path(jail_name)
+        jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
         # Create directory for rootfs
         os.makedirs(jail_rootfs_path, exist_ok=True)
@@ -729,6 +742,18 @@ def create_jail(jail_name):
         start_jail(jail_name)
 
 
+def edit_jail(jail_name):
+    """
+    Edit jail with given name.
+    """
+    if check_jail_name_valid(jail_name):
+        if check_jail_name_available(jail_name, False):
+            eprint(f"A jail with name {jail_name} does not exist.")
+        else:
+            os.system(f'nano {get_jail_config_path(jail_name)}')
+            print("Restart the jail for edits to apply (if you made any).")
+
+
 def remove_jail(jail_name):
     """
     Remove jail with given name.
@@ -770,11 +795,12 @@ def list_jails():
     print("\nCurrently running:\n")
     subprocess.run(['machinectl', 'list'])
 
+
 def install_jailmaker():
     # Check if command exists in path
     if shutil.which('systemd-nspawn'):
         print("systemd-nspawn is already installed.")
-    else:    
+    else:
         print("Installing jailmaker dependencies...")
 
         original_permissions = {}
@@ -787,14 +813,15 @@ def install_jailmaker():
             stat_chmod(file, 0o755)
 
         subprocess.run(['apt-get', 'update'], check=True)
-        subprocess.run(['apt-get', 'install', '-y', 'systemd-container'], check=True)
+        subprocess.run(['apt-get', 'install', '-y',
+                       'systemd-container'], check=True)
 
         # Restore original permissions
         print("Restore permissions of apt and dpkg.")
 
         for file, original_permission in original_permissions.items():
             stat_chmod(file, original_permission)
-    
+
     target = '/usr/bin/jlmkr'
 
     # Check if command exists in path
@@ -804,14 +831,17 @@ def install_jailmaker():
         print(f"Creating symlink {target} to {SCRIPT_PATH}.")
         os.symlink(SCRIPT_PATH, target)
     else:
-        print(f"File {target} already exists... Maybe it's a broken symlink from a previous install attempt?")
+        print(
+            f"File {target} already exists... Maybe it's a broken symlink from a previous install attempt?")
         print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
 
     print("Done installing jailmaker.")
 
+
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
-        fail(f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`.")
+        fail(
+            f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`.")
 
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, epilog=DISCLAIMER)
@@ -826,12 +856,16 @@ def main():
     subparsers.add_parser(name='start', epilog=DISCLAIMER).add_argument(
         'name', help='name of the jail to start')
 
+    subparsers.add_parser(name='edit', epilog=DISCLAIMER).add_argument(
+        'name', help='name of the jail to edit')
+
     subparsers.add_parser(name='remove', epilog=DISCLAIMER).add_argument(
         'name', help='name of the jail to remove')
 
     subparsers.add_parser(name='list', epilog=DISCLAIMER)
 
-    subparsers.add_parser(name='install', epilog=DISCLAIMER, help="Install jailmaker dependencies and create symlink")
+    subparsers.add_parser(name='install', epilog=DISCLAIMER,
+                          help="Install jailmaker dependencies and create symlink")
 
     if os.getuid() != 0:
         parser.print_usage()
@@ -851,6 +885,9 @@ def main():
 
     elif args.subcommand == 'create':
         create_jail(args.name)
+
+    elif args.subcommand == 'edit':
+        edit_jail(args.name)
 
     elif args.subcommand == 'remove':
         remove_jail(args.name)
