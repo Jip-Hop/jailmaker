@@ -325,7 +325,7 @@ def start_jail(jail_name):
         systemctl status {SYMLINK_NAME}-{jail_name}
 
         Get a shell:
-        machinectl shell {jail_name}
+        {os.path.basename(__file__)} shell {jail_name}
     """))
 
 
