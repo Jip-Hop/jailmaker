@@ -192,6 +192,9 @@ def start_jail(jail_name):
     """
     Start jail with given name.
     """
+    
+    if jail_is_running(jail_name):
+        fail(f"Skipped starting jail {jail_name}. It appears to be running already...")
 
     jail_path = get_jail_path(jail_name)
     jail_config_path = get_jail_config_path(jail_name)
