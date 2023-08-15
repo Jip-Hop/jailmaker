@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict
 import configparser
 import contextlib
 import ctypes
 import glob
 import hashlib
+import json
 import os
 import platform
 import re
@@ -26,9 +28,10 @@ if sys.stdout.isatty():
     BOLD = '\033[1m'
     RED = '\033[91m'
     YELLOW = '\033[93m'
+    UNDERLINE = '\033[4m'
     NORMAL = '\033[0m'
 else:
-    BOLD = RED = YELLOW = NORMAL = ''
+    BOLD = RED = YELLOW = UNDERLINE = NORMAL = ''
 
 DISCLAIMER = f"""{YELLOW}{BOLD}USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
@@ -358,9 +361,11 @@ def run_lxc_download_script(jail_name=None, jail_path=None, jail_rootfs_path=Non
     os.makedirs(lxc_cache, exist_ok=True)
     stat_chmod(lxc_cache, 0o700)
 
-    # Remove if owner of lxc_download_script is not root
-    if os.stat(lxc_download_script).st_uid != 0:
-        os.remove(lxc_download_script)
+    try:
+        if os.stat(lxc_download_script).st_uid != 0:
+            os.remove(lxc_download_script)
+    except FileNotFoundError:
+        pass
 
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
@@ -806,22 +811,86 @@ def remove_jail(jail_name):
                 eprint("Wrong name, nothing happened.")
 
 
+def print_table(header, list_of_objects, empty_value_indicator):
+
+    # Find max width for each column
+    widths = defaultdict(int)
+    for obj in list_of_objects:
+        for hdr in header:
+            widths[hdr] = max(widths[hdr], len(
+                str(obj.get(hdr))), len(str(hdr)))
+
+    # Print header
+    print(UNDERLINE + ' '.join(hdr.upper().ljust(widths[hdr])
+          for hdr in header) + NORMAL)
+
+    # Print rows
+    for obj in list_of_objects:
+        print(' '.join(str(obj.get(hdr, empty_value_indicator)).ljust(
+            widths[hdr]) for hdr in header))
+
+
+def run_command_and_parse_json(command):
+    result = subprocess.run(command, capture_output=True, text=True)
+    output = result.stdout.strip()
+
+    try:
+        parsed_output = json.loads(output)
+        return parsed_output
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        return None
+
+
 def list_jails():
     """
     List all available and running jails.
     """
 
-    jails = next(os.walk('jails'))[1]
+    jails = {}
+    empty_value_indicator = '-'
 
-    print("Available jails:\n")
-    if not len(jails):
-        print("No jails.")
-    else:
-        for jail in jails:
-            print(f"{jail}")
+    try:
+        jail_dirs = os.listdir('jails')
+    except FileNotFoundError:
+        jail_dirs = []
 
-    print("\nCurrently running:\n")
-    subprocess.run(['machinectl', 'list'])
+    if not jail_dirs:
+        print('No jails.')
+        return
+
+    for jail in jail_dirs:
+        jails[jail] = {"name": jail, "running": False}
+
+    # Get running jails from machinectl
+    running_machines = run_command_and_parse_json(
+        ['machinectl', 'list', '-o', 'json'])
+
+    # Augment the jails dict with output from machinectl
+    for machine in running_machines:
+        machine_name = machine['machine']
+        # We're only interested in the list of jails made with jailmaker
+        if machine['service'] == 'systemd-nspawn' and machine_name in jails:
+
+            addresses = (machine.get('addresses')
+                         or empty_value_indicator).split('\n')
+            if len(addresses) > 1:
+                addresses = addresses[0] + '…'
+            else:
+                addresses = addresses[0]
+
+            jails[machine_name] = {
+                "name": machine_name,
+                "running": True,
+                "os": machine['os'],
+                "version": machine['version'],
+                "addresses": addresses
+            }
+
+    # TODO: add additional properties from the jails config file
+
+    print_table(["name", "running", "os", "version", "addresses"],
+                sorted(jails.values(), key=lambda x: x['name']), empty_value_indicator)
 
 
 def install_jailmaker():
