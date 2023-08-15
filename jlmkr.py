@@ -172,6 +172,15 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     systemd_nspawn_additional_args += nvidia_mounts
 
 
+def stop_jail(jail_name):
+    """
+    Stop jail with given name.
+    """
+
+    # Stop the jail using machinectl
+    subprocess.run(["machinectl", "poweroff", jail_name])
+
+
 def start_jail(jail_name):
     """
     Start jail with given name.
@@ -307,9 +316,6 @@ def start_jail(jail_name):
 
         Check status:
         systemctl status {SYMLINK_NAME}-{jail_name}
-
-        Stop the jail:
-        machinectl stop {jail_name}
 
         Get a shell:
         machinectl shell {jail_name}
@@ -799,7 +805,7 @@ def remove_jail(jail_name):
                 jail_path = get_jail_path(jail_name)
                 if jail_is_running(jail_name):
                     print(f"\nWait for {jail_name} to stop...", end="")
-                    subprocess.run(['machinectl', 'stop', jail_name])
+                    stop_jail(jail_name)
                     # Need to sleep since deleting immediately after stop causes problems...
                     while jail_is_running(jail_name):
                         time.sleep(1)
@@ -959,6 +965,10 @@ def main():
                           help='start a previously created jail').add_argument(
         'name', help='name of the jail')
 
+    subparsers.add_parser(name='stop', epilog=DISCLAIMER,
+                          help='stop a running jail').add_argument(
+        'name', help='name of the jail')
+
     subparsers.add_parser(name='edit', epilog=DISCLAIMER,
                           help=f'edit jail config with {TEXT_EDITOR} text editor').add_argument(
         'name', help='name of the jail to edit')
@@ -968,7 +978,7 @@ def main():
         'name', help='name of the jail to remove')
 
     subparsers.add_parser(name='list', epilog=DISCLAIMER,
-                          help='list jails (created and running)')
+                          help='list jails')
 
     subparsers.add_parser(name='images', epilog=DISCLAIMER,
                           help='list available images to create jails from')
@@ -986,10 +996,10 @@ def main():
     args = parser.parse_args()
 
     if args.subcommand == 'start':
-        if args.name:
-            start_jail(args.name)
-        else:
-            parser.error("Please specify the name of the jail to start.")
+        start_jail(args.name)
+
+    if args.subcommand == 'stop':
+        stop_jail(args.name)
 
     elif args.subcommand == 'create':
         create_jail(args.name)
