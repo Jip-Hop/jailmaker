@@ -44,6 +44,8 @@ DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7
 SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
+SYMLINK_NAME = 'jlmkr'
+TEXT_EDITOR = 'nano'
 
 
 def eprint(*args, **kwargs):
@@ -89,7 +91,7 @@ def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
 def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_name):
     jail_rootfs_path = get_jail_rootfs_path(jail_name)
     ld_so_conf_path = Path(os.path.join(jail_rootfs_path),
-                           'etc/ld.so.conf.d/jlmkr-nvidia.conf')
+                           f'etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf')
 
     if gpu_passthrough_nvidia != '1':
         # Cleanup the config file we made when passthrough was enabled
@@ -186,7 +188,7 @@ def start_jail(jail_name):
     print("Config loaded!")
 
     systemd_run_additional_args = [
-        f"--unit=jlmkr-{jail_name}",
+        f"--unit={SYMLINK_NAME}-{jail_name}",
         f"--working-directory=./{jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
@@ -292,15 +294,15 @@ def start_jail(jail_name):
         fail(dedent(f"""
             Failed to start the jail...
             In case of a config error, you may fix it with:
-            nano {shlex.quote(jail_config_path)}
+            {SYMLINK_NAME} edit {jail_name}
         """))
 
     print(dedent(f"""
         Check logging:
-        journalctl -u jlmkr-{jail_name}
+        journalctl -u {SYMLINK_NAME}-{jail_name}
 
         Check status:
-        systemctl status jlmkr-{jail_name}
+        systemctl status {SYMLINK_NAME}-{jail_name}
 
         Stop the jail:
         machinectl stop {jail_name}
@@ -765,9 +767,14 @@ def edit_jail(jail_name):
         if check_jail_name_available(jail_name, False):
             eprint(f"A jail with name {jail_name} does not exist.")
         else:
-            os.system(f'nano {get_jail_config_path(jail_name)}')
-            if jail_is_running(jail_name):
-                print("Restart the jail for edits to apply (if you made any).")
+            jail_config_path = get_jail_config_path(jail_name)
+            if not shutil.which(TEXT_EDITOR):
+                print(f"Unable to edit config file: {jail_config_path}.")
+                print(f"The {TEXT_EDITOR} text editor is not available.")
+            else:
+                os.system(f'{TEXT_EDITOR} {get_jail_config_path(jail_name)}')
+                if jail_is_running(jail_name):
+                    print("\nRestart the jail for edits to apply (if you made any).")
 
 
 def remove_jail(jail_name):
@@ -841,11 +848,11 @@ def install_jailmaker():
         for file, original_permission in original_permissions.items():
             stat_chmod(file, original_permission)
 
-    target = '/usr/local/sbin/jlmkr'
+    target = f'/usr/local/sbin/{SYMLINK_NAME}'
 
     # Check if command exists in path
-    if shutil.which('jlmkr'):
-        print("The jlmkr command is available.")
+    if shutil.which(SYMLINK_NAME):
+        print(f"The {SYMLINK_NAME} command is available.")
     elif not os.path.lexists(target):
         print(f"Creating symlink {target} to {SCRIPT_PATH}.")
         os.symlink(SCRIPT_PATH, target)
@@ -882,7 +889,7 @@ def main():
         'name', help='name of the jail')
 
     subparsers.add_parser(name='edit', epilog=DISCLAIMER,
-                          help='edit jail config with nano text editor').add_argument(
+                          help=f'edit jail config with {TEXT_EDITOR} text editor').add_argument(
         'name', help='name of the jail to edit')
 
     subparsers.add_parser(name='remove', epilog=DISCLAIMER,
