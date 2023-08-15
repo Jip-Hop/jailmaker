@@ -407,13 +407,28 @@ def run_lxc_download_script(jail_name=None, jail_path=None, jail_rootfs_path=Non
             fail("Abort! Downloaded script has unexpected contents.")
 
     stat_chmod(lxc_download_script, 0o700)
+    
+    check_exit_code = False
 
     if None not in [jail_name, jail_path, jail_rootfs_path, distro, release]:
-        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}',
-                        f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
+        check_exit_code = True
+        cmd = [lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',
+               f'--rootfs={jail_rootfs_path}', f'--arch={arch}', f'--dist={distro}', f'--release={release}']
     else:
-        subprocess.run([lxc_download_script, '--list',
-                        f'--arch={arch}'], env={'LXC_CACHE_PATH': lxc_cache})
+        cmd = [lxc_download_script, '--list', f'--arch={arch}']
+
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache})
+
+    for line in iter(p1.stdout.readline, b''):
+        line = line.decode().strip()
+        # Filter out the known incompatible distros 
+        if not re.match(r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s", line):
+            print(line)
+
+    p1.wait()
+    
+    if check_exit_code and p1.returncode != 0:
+        fail("Aborting...")
 
 
 def stat_chmod(file_path, mode):
@@ -518,9 +533,8 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
             {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
 
             You may now choose from a list which distro to install.
-            But not all of them will work with {SCRIPT_NAME} since these images are made for LXC.
+            But not all of them may work with {SCRIPT_NAME} since these images are made for LXC.
             Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
-            Others (Alpine, Devuan, Void Linux) probably will not.
         """))
         input("Press Enter to continue...")
         print()
@@ -1072,7 +1086,6 @@ def main():
         install_jailmaker()
 
     elif args.subcommand == 'images':
-        # TODO: print some info before and after the list of images
         run_lxc_download_script()
 
     elif args.subcommand:
