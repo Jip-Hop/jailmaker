@@ -48,6 +48,7 @@ DOWNLOAD_SCRIPT_DIGEST = '6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7
 SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
+COMMAND_NAME = os.path.basename(__file__)
 SYMLINK_NAME = 'jlmkr'
 TEXT_EDITOR = 'nano'
 
@@ -344,7 +345,7 @@ def start_jail(jail_name):
 
     print(dedent(f"""
         Get a shell:
-        {os.path.basename(__file__)} shell {jail_name}
+        {COMMAND_NAME} shell {jail_name}
     """))
 
 
@@ -507,7 +508,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
 
     if os.path.basename(os.getcwd()) != 'jailmaker':
         fail(dedent(f"""
-            {SCRIPT_NAME} needs to create files.
+            {COMMAND_NAME} needs to create files.
             Currently it can not decide if it is safe to create files in:
             {SCRIPT_DIR_PATH}
             Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""))
@@ -534,7 +535,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
             {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
 
             You may now choose from a list which distro to install.
-            But not all of them may work with {SCRIPT_NAME} since these images are made for LXC.
+            But not all of them may work with {COMMAND_NAME} since these images are made for LXC.
             Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
         """))
         input("Press Enter to continue...")
@@ -567,7 +568,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
     # Otherwise we may cleanup the wrong directory
     try:
         print(dedent(f"""
-            Docker won't be installed by {SCRIPT_NAME}.
+            Docker won't be installed by {COMMAND_NAME}.
             But it can setup the jail with the capabilities required to run docker.
             You can turn DOCKER_COMPATIBLE mode on/off post-install.
         """))
@@ -703,7 +704,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
                 Read about the downsides of nsenter:
                 https://github.com/systemd/systemd/issues/12785#issuecomment-503019081
 
-                {BOLD}Using this distro with {SCRIPT_NAME} is NOT recommended.{NORMAL}
+                {BOLD}Using this distro with {COMMAND_NAME} is NOT recommended.{NORMAL}
             """))
 
             if agree("Abort creating jail?", 'y'):
@@ -794,7 +795,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
             systemd_nspawn_default_args={' '.join(systemd_nspawn_default_args)}
         """)
 
-        print(config, file=open(os.path.join(jail_path, 'config'), 'w'))
+        print(config, file=open(jail_config_path, 'w'))
 
         os.chmod(jail_config_path, 0o600)
 
@@ -898,7 +899,7 @@ def list_jails():
     empty_value_indicator = '-'
 
     try:
-        jail_dirs = os.listdir('jails')
+        jail_dirs = os.listdir(JAILS_DIR_PATH)
     except FileNotFoundError:
         jail_dirs = []
 
