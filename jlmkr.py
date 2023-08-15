@@ -210,28 +210,48 @@ def stop_jail(jail_name):
     subprocess.run(["machinectl", "poweroff", jail_name])
 
 
-def start_jail(jail_name):
-    """
-    Start jail with given name.
-    """
-
-    if jail_is_running(jail_name):
-        fail(
-            f"Skipped starting jail {jail_name}. It appears to be running already...")
-
-    jail_path = get_jail_path(jail_name)
-    jail_config_path = get_jail_config_path(jail_name)
-
+def parse_config(jail_config_path):
     config = configparser.ConfigParser()
     try:
         # Workaround to read config file without section headers
         config.read_string('[DEFAULT]\n'+Path(jail_config_path).read_text())
     except FileNotFoundError:
-        fail(f'Unable to find: {jail_config_path}.')
+        eprint(f'Unable to find config file: {jail_config_path}.')
+        return
 
     config = dict(config['DEFAULT'])
 
-    print("Config loaded!")
+    return config
+
+
+def start_jail(jail_name, check_startup_enabled=False):
+    """
+    Start jail with given name.
+    """
+    skip_start_message = f"Skipped starting jail {jail_name}. It appears to be running already..."
+
+    if not check_startup_enabled and jail_is_running(jail_name):
+        fail(skip_start_message)
+
+    jail_path = get_jail_path(jail_name)
+    jail_config_path = get_jail_config_path(jail_name)
+
+    config = parse_config(jail_config_path)
+
+    if not config:
+        fail(f'Aborting...')
+
+    # Only start if the startup setting is enabled in the config
+    if check_startup_enabled:
+        if config.get('startup') == '1':
+            # We should start this jail based on the startup config...
+            if jail_is_running(jail_name):
+                # ...but we can skip if it's already running
+                eprint(skip_start_message)
+                return
+        else:
+            # Skip starting this jail since the startup config setting isnot enabled
+            return
 
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
@@ -327,26 +347,19 @@ def start_jail(jail_name):
            ]
 
     print(dedent(f"""
-        Starting jail with the following command:
+        Starting jail {jail_name} with the following command:
 
         {shlex.join(cmd)}
-
-        Starting jail with name: {jail_name}
     """))
 
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
         fail(dedent(f"""
-            Failed to start the jail...
+            Failed to start jail {jail_name}...
             In case of a config error, you may fix it with:
             {SYMLINK_NAME} edit {jail_name}
         """))
-
-    print(dedent(f"""
-        Get a shell:
-        {COMMAND_NAME} shell {jail_name}
-    """))
 
 
 def cleanup(jail_path):
@@ -651,8 +664,17 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         systemd_nspawn_user_args = input("Additional flags: ") or ""
         # Disable tab auto completion
         readline.parse_and_bind('tab: self-insert')
-        print()
 
+        print(dedent(f"""
+            The `{COMMAND_NAME} startup` command can automatically ensure {COMMAND_NAME} is installed properly and start a selection of jails.
+            This comes in handy when you want to automatically start multiple jails after booting TrueNAS SCALE (e.g. from a Post Init Script).
+        """))
+
+        startup = int(agree(
+            f"Do you want to start this jail when running: {COMMAND_NAME} startup?", 'n'))
+
+        print()
+        
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
@@ -786,6 +808,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         ]
 
         config = cleandoc(f"""
+            startup={startup}
             docker_compatible={docker_compatible}
             gpu_passthrough_intel={gpu_passthrough_intel}
             gpu_passthrough_nvidia={gpu_passthrough_nvidia}
@@ -805,7 +828,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         raise error
 
     print()
-    if agree("Do you want to start the jail?", 'y'):
+    if agree(f"Do you want to start jail {jail_name} right now?", 'y'):
         start_jail(jail_name)
 
 
@@ -890,6 +913,15 @@ def run_command_and_parse_json(command):
         return None
 
 
+def get_all_jail_names():
+    try:
+        jail_names = os.listdir(JAILS_DIR_PATH)
+    except FileNotFoundError:
+        jail_names = []
+
+    return jail_names
+
+
 def list_jails():
     """
     List all available and running jails.
@@ -898,16 +930,13 @@ def list_jails():
     jails = {}
     empty_value_indicator = '-'
 
-    try:
-        jail_dirs = os.listdir(JAILS_DIR_PATH)
-    except FileNotFoundError:
-        jail_dirs = []
+    jail_names = get_all_jail_names()
 
-    if not jail_dirs:
+    if not jail_names:
         print('No jails.')
         return
 
-    for jail in jail_dirs:
+    for jail in jail_names:
         jails[jail] = {"name": jail, "running": False}
 
     # Get running jails from machinectl
@@ -937,7 +966,19 @@ def list_jails():
 
     # TODO: add additional properties from the jails config file
 
-    print_table(["name", "running", "os", "version", "addresses"],
+    for jail_name in jails:
+
+        config = parse_config(get_jail_config_path(jail_name))
+
+        startup = False
+        if config:
+            startup = bool(int(config.get('startup', '0')))
+        # TODO: in case config is missing or parsing fails,
+        # should an error message be thrown here?
+
+        jails[jail_name]['startup'] = startup
+
+    print_table(["name", "running", "startup", "os", "version", "addresses"],
                 sorted(jails.values(), key=lambda x: x['name']), empty_value_indicator)
 
 
@@ -981,6 +1022,12 @@ def install_jailmaker():
         print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
 
     print("Done installing jailmaker.")
+
+
+def startup_jails():
+    install_jailmaker()
+    for jail_name in get_all_jail_names():
+        start_jail(jail_name, True)
 
 
 def main():
@@ -1042,6 +1089,9 @@ def main():
     subparsers.add_parser(name='images', epilog=DISCLAIMER,
                           help='list available images to create jails from')
 
+    subparsers.add_parser(name='startup', epilog=DISCLAIMER,
+                          help=f'install {SYMLINK_NAME} and startup selected jails')
+
     if os.getuid() != 0:
         parser.print_usage()
         fail("Run this script as root...")
@@ -1054,7 +1104,13 @@ def main():
 
     args, additional_args = parser.parse_known_args()
 
-    if args.subcommand == 'start':
+    if args.subcommand == 'install':
+        install_jailmaker()
+
+    elif args.subcommand == 'create':
+        create_jail(args.name)
+
+    elif args.subcommand == 'start':
         start_jail(args.name)
 
     elif args.subcommand == 'shell':
@@ -1072,9 +1128,6 @@ def main():
     elif args.subcommand == 'stop':
         stop_jail(args.name)
 
-    elif args.subcommand == 'create':
-        create_jail(args.name)
-
     elif args.subcommand == 'edit':
         edit_jail(args.name)
 
@@ -1084,14 +1137,11 @@ def main():
     elif args.subcommand == 'list':
         list_jails()
 
-    elif args.subcommand == 'install':
-        install_jailmaker()
-
     elif args.subcommand == 'images':
         run_lxc_download_script()
 
-    elif args.subcommand:
-        parser.print_usage()
+    elif args.subcommand == 'startup':
+        startup_jails()
 
     else:
         if agree("Create a new jail?", 'y'):

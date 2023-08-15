@@ -26,21 +26,12 @@ Create a new dataset called `jailmaker` with the default settings (from TrueNAS 
 cd /mnt/mypool/jailmaker
 curl --location --remote-name https://raw.githubusercontent.com/Jip-Hop/jailmaker/main/jlmkr.py
 chmod +x jlmkr.py
-```
-
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE.
-
-### Install Jailmaker Dependencies
-
-Unfortunately since version 22.12.3 TrueNAS SCALE no longer includes systemd-nspawn. In order to use jailmaker, we need to first install systemd-nspawn using the command below.
-
-```shell
 ./jlmkr.py install
 ```
 
-We need to do this again after each update of TrueNAS SCALE. So it is recommended to schedule this command as Post Init Script (see [Autostart Jail on Boot](#autostart-jail-on-boot)).
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. Additionally a symlink has been created so you can call `jlmkr` from anywhere.
 
-Additionally the install command will create a symlink from `/usr/local/sbin/jlmkr` to `jlmkr.py`. Thanks this this you can now run the `jlmkr` command from anywhere (instead of having to run `./jlmkr.py` from inside the directory where you've placed it).
+After an update of TrueNAS SCALE the symlink will be lost and `systemd-nspawn` (the core package which makes `jailmaker` work) may be gone too. Not to worry, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
 
 ## Usage
 
@@ -54,9 +45,18 @@ jlmkr create myjail
 
 After answering a few questions you should have your first jail up and running!
 
-#### Autostart Jail on Boot
+### Startup Jails on Boot
 
-In order to start a jail automatically after TrueNAS boots, run `jlmkr start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && jlmkr start myjail`.
+```shell
+# Best to call startup directly (not through the jlmkr symlink)
+/mnt/mypool/jailmaker/jlmkr.py startup
+
+# Can be called from the symlink too...
+# But this may not be available after a TrueNAS SCALE update
+jlmkr startup
+```
+
+In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This will automatically fix the installation of `systemd-nspawn` and setup the `jlmkr` symlink, as well as start all the jails with `startup=1` in the config file. Running the `startup` command Post Init is recommended to keep `jailmaker` working after a TrueNAS SCALE update.
 
 ### Start Jail
 
@@ -134,11 +134,11 @@ See [Advanced Networking](./NETWORKING.md) for more.
 
 ## Docker
 
-Jailmaker won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
+The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
 
 ## Nvidia GPU
 
-To make passthrough of the nvidia GPU work, you need to schedule a Pre Init command. The reason is that TrueNAS SCALE by default doesn't load the nvidia kernel modules (and jailmaker doesn't do that either). [This screenshot](https://user-images.githubusercontent.com/1704047/222915803-d6dd51b0-c4dd-4189-84be-a04d38cca0b3.png) shows what the configuration should look like.
+To make passthrough of the nvidia GPU work, you need to schedule a Pre Init command. The reason is that TrueNAS SCALE by default doesn't load the nvidia kernel modules (and `jailmaker` doesn't do that either). [This screenshot](https://user-images.githubusercontent.com/1704047/222915803-d6dd51b0-c4dd-4189-84be-a04d38cca0b3.png) shows what the configuration should look like.
 
 ```
 [ ! -f /dev/nvidia-uvm ] && modprobe nvidia-current-uvm && /usr/bin/nvidia-modprobe -c0 -u
@@ -146,7 +146,7 @@ To make passthrough of the nvidia GPU work, you need to schedule a Pre Init comm
 
 ## Comparison
 
-TODO: write comparison between systemd-nspawn (without jailmaker), LXC, VMs, Docker (on the host).
+TODO: write comparison between systemd-nspawn (without `jailmaker`), LXC, VMs, Docker (on the host).
 
 ### Incompatible Distros
 
