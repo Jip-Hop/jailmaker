@@ -35,7 +35,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.9'
+VERSION = '0.0.10'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -892,7 +892,7 @@ def main():
     images_parser = subparsers.add_parser(
         name='images', epilog=DISCLAIMER, help='show the list of images available to create jails from')
 
-    parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}{images_parser.format_usage()}"
+    # parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}{images_parser.format_usage()}"
 
     if os.getuid() != 0:
         parser.print_usage()
