@@ -42,7 +42,9 @@ We need to do this again after each update of TrueNAS SCALE. So it is recommende
 
 Additionally the install command will create a symlink from `/usr/local/sbin/jlmkr` to `jlmkr.py`. Thanks this this you can now run the `jlmkr` command from anywhere (instead of having to run `./jlmkr.py` from inside the directory where you've placed it).
 
-## Create Jail
+## Usage
+
+### Create Jail
 
 Creating a jail is interactive. You'll be presented with questions which guide you through the process.
 
@@ -52,23 +54,23 @@ jlmkr create myjail
 
 After answering a few questions you should have your first jail up and running!
 
-### Autostart Jail on Boot
+#### Autostart Jail on Boot
 
 In order to start a jail automatically after TrueNAS boots, run `jlmkr start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && jlmkr start myjail`.
 
-## Start Jail
+### Start Jail
 
 ```shell
 jlmkr start myjail
 ```
 
-## List Jails
+### List Jails
 
 ```shell
 jlmkr list
 ```
 
-## Execute Command in Jail
+### Execute Command in Jail
 
 You may want to execute a command inside a jail, for example from a shell script or a CRON job. The example below executes the `env` command inside the jail.
 
@@ -82,7 +84,7 @@ This example executes bash inside the jail with a command as additional argument
 jlmkr exec myjail bash -c 'echo test; echo $RANDOM;'
 ```
 
-## Edit Jail Config
+### Edit Jail Config
 
 ```shell
 jlmkr edit myjail
@@ -90,37 +92,37 @@ jlmkr edit myjail
 
 Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file, e.g. using the `jlmkr edit myjail` command (which uses the nano text editor). You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
-## Remove Jail
+### Remove Jail
 
 ```shell
 jlmkr remove myjail
 ```
 
-## Stop Jail
+### Stop Jail
 
 ```shell
 jlmkr stop myjail
 ```
 
-## Jail Shell
+### Jail Shell
 
 ```shell
 jlmkr shell myjail
 ```
 
-## Jail Status
+### Jail Status
 
 ```shell
 jlmkr status myjail
 ```
 
-## Jail Logs
+### Jail Logs
 
 ```shell
 jlmkr log myjail
 ```
 
-## Additional Commands
+### Additional Commands
 
 Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their capabilities. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
 
