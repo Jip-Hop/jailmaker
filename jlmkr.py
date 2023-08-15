@@ -907,7 +907,7 @@ def main():
         fail("Run this script as root...")
 
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
-    stat_chmod(SCRIPT_NAME, 0o700)
+    stat_chmod(SCRIPT_PATH, 0o700)
 
     # Work relative to this script
     os.chdir(SCRIPT_DIR_PATH)
