@@ -407,7 +407,7 @@ def run_lxc_download_script(jail_name=None, jail_path=None, jail_rootfs_path=Non
             fail("Abort! Downloaded script has unexpected contents.")
 
     stat_chmod(lxc_download_script, 0o700)
-    
+
     check_exit_code = False
 
     if None not in [jail_name, jail_path, jail_rootfs_path, distro, release]:
@@ -417,16 +417,17 @@ def run_lxc_download_script(jail_name=None, jail_path=None, jail_rootfs_path=Non
     else:
         cmd = [lxc_download_script, '--list', f'--arch={arch}']
 
-    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache})
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, env={
+                          "LXC_CACHE_PATH": lxc_cache})
 
     for line in iter(p1.stdout.readline, b''):
         line = line.decode().strip()
-        # Filter out the known incompatible distros 
+        # Filter out the known incompatible distros
         if not re.match(r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s", line):
             print(line)
 
     p1.wait()
-    
+
     if check_exit_code and p1.returncode != 0:
         fail("Aborting...")
 
