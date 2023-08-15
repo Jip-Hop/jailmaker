@@ -172,12 +172,19 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     systemd_nspawn_additional_args += nvidia_mounts
 
 
+def shell_jail(jail_name):
+    """
+    Open a shell in the jail with given name.
+    """
+
+    subprocess.run(["machinectl", "shell", jail_name])
+
+
 def stop_jail(jail_name):
     """
     Stop jail with given name.
     """
 
-    # Stop the jail using machinectl
     subprocess.run(["machinectl", "poweroff", jail_name])
 
 
@@ -965,6 +972,10 @@ def main():
                           help='start a previously created jail').add_argument(
         'name', help='name of the jail')
 
+    subparsers.add_parser(name='shell', epilog=DISCLAIMER,
+                          help='open shell in running jail').add_argument(
+        'name', help='name of the jail')
+
     subparsers.add_parser(name='stop', epilog=DISCLAIMER,
                           help='stop a running jail').add_argument(
         'name', help='name of the jail')
@@ -998,7 +1009,10 @@ def main():
     if args.subcommand == 'start':
         start_jail(args.name)
 
-    if args.subcommand == 'stop':
+    elif args.subcommand == 'shell':
+        shell_jail(args.name)
+
+    elif args.subcommand == 'stop':
         stop_jail(args.name)
 
     elif args.subcommand == 'create':
