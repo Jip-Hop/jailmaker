@@ -342,6 +342,40 @@ def validate_sha256(file_path, digest):
         return False
 
 
+def run_lxc_download_script(jail_name=None, jail_path=None, jail_rootfs_path=None, distro=None, release=None):
+
+    arch = 'amd64'
+    lxc_dir = '.lxc'
+    lxc_cache = os.path.join(lxc_dir, 'cache')
+    lxc_download_script = os.path.join(lxc_dir, 'lxc-download.sh')
+
+    # Create the lxc dirs if nonexistent
+    os.makedirs(lxc_dir, exist_ok=True)
+    stat_chmod(lxc_dir, 0o700)
+    os.makedirs(lxc_cache, exist_ok=True)
+    stat_chmod(lxc_cache, 0o700)
+
+    # Remove if owner of lxc_download_script is not root
+    if os.stat(lxc_download_script).st_uid != 0:
+        os.remove(lxc_download_script)
+
+    # Fetch the lxc download script if not present locally (or hash doesn't match)
+    if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
+        urllib.request.urlretrieve(
+            "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
+        if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
+            fail("Abort! Downloaded script has unexpected contents.")
+
+    stat_chmod(lxc_download_script, 0o700)
+
+    if None not in [jail_name, jail_path, jail_rootfs_path, distro, release]:
+        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}',
+                        f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
+    else:
+        subprocess.run([lxc_download_script, '--list',
+                        f'--arch={arch}'], env={'LXC_CACHE_PATH': lxc_cache})
+
+
 def stat_chmod(file_path, mode):
     """
     Change mode if file doesn't already have this mode.
@@ -415,11 +449,6 @@ def create_jail(jail_name):
 
     print(DISCLAIMER)
 
-    arch = 'amd64'
-    lxc_dir = '.lxc'
-    lxc_cache = os.path.join(lxc_dir, 'cache')
-    lxc_download_script = os.path.join(lxc_dir, 'lxc-download.sh')
-
     if os.path.basename(os.getcwd()) != 'jailmaker':
         fail(dedent(f"""
             {SCRIPT_NAME} needs to create files.
@@ -439,27 +468,9 @@ def create_jail(jail_name):
         if not agree("Do you wish to ignore this warning and continue?", 'n'):
             fail("Aborting...")
 
-    # Create the lxc dirs if nonexistent
-    os.makedirs(lxc_dir, exist_ok=True)
-    stat_chmod(lxc_dir, 0o700)
-    os.makedirs(lxc_cache, exist_ok=True)
-    stat_chmod(lxc_cache, 0o700)
-
     # Create the dir where to store the jails
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
     stat_chmod(JAILS_DIR_PATH, 0o700)
-
-    # Fetch the lxc download script if not present locally (or hash doesn't match)
-    if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-        urllib.request.urlretrieve(
-            "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in", lxc_download_script)
-        if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-            fail("Abort! Downloaded script has unexpected contents.")
-
-    stat_chmod(lxc_download_script, 0o700)
-
-    distro = 'debian'
-    release = 'bullseye'
 
     print()
     if not agree("Install the recommended distro (Debian 11)?", 'y'):
@@ -474,8 +485,7 @@ def create_jail(jail_name):
         input("Press Enter to continue...")
         print()
 
-        subprocess.call([lxc_download_script, '--list',
-                        '--arch=' + arch], env={'LXC_CACHE_PATH': lxc_cache})
+        run_lxc_download_script()
 
         print(dedent("""
             Choose from the DIST column.
@@ -595,8 +605,8 @@ def create_jail(jail_name):
         # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        subprocess.run([lxc_download_script, f'--name={jail_name}', f'--path={jail_path}',  f'--rootfs={jail_rootfs_path}', f'--arch={arch}',
-                        f'--dist={distro}', f'--release={release}'], check=True, env={"LXC_CACHE_PATH": lxc_cache})
+        run_lxc_download_script(jail_name, jail_path,
+                                jail_rootfs_path, distro, release)
 
         # Assuming the name of your jail is "myjail"
         # and "machinectl shell myjail" doesn't work
@@ -857,13 +867,16 @@ def main():
 
     parser.add_argument('--version', action='version', version=VERSION)
 
-    subparsers = parser.add_subparsers(title='commands', dest='subcommand')
+    subparsers = parser.add_subparsers(
+        title='commands', dest='subcommand', metavar="")
 
-    subparsers.add_parser(name='create', epilog=DISCLAIMER).add_argument(
-        'name', nargs='?', help='name of the jail to create')
+    create_parser = subparsers.add_parser(
+        name='create', epilog=DISCLAIMER, help='create a new jail')
+    create_parser.add_argument('name', nargs='?', help='name of the jail')
 
-    subparsers.add_parser(name='start', epilog=DISCLAIMER).add_argument(
-        'name', help='name of the jail to start')
+    start_parser = subparsers.add_parser(
+        name='start', epilog=DISCLAIMER, help='start a previously created jail')
+    start_parser.add_argument('name', help='name of the jail')
 
     subparsers.add_parser(name='edit', epilog=DISCLAIMER).add_argument(
         'name', help='name of the jail to edit')
@@ -876,13 +889,20 @@ def main():
     subparsers.add_parser(name='install', epilog=DISCLAIMER,
                           help="Install jailmaker dependencies and create symlink")
 
+    images_parser = subparsers.add_parser(
+        name='images', epilog=DISCLAIMER, help='show the list of images available to create jails from')
+
+    parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}{images_parser.format_usage()}"
+
     if os.getuid() != 0:
         parser.print_usage()
         fail("Run this script as root...")
 
-    os.chdir(SCRIPT_DIR_PATH)
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
-    stat_chmod(SCRIPT_NAME, 0o700)
+    stat_chmod(__file__, 0o700)
+
+    # Work relative to this script
+    os.chdir(SCRIPT_DIR_PATH)
 
     args = parser.parse_args()
 
@@ -906,6 +926,10 @@ def main():
 
     elif args.subcommand == 'install':
         install_jailmaker()
+
+    elif args.subcommand == 'images':
+        # TODO: print some info before and after the list of images
+        run_lxc_download_script()
 
     elif args.subcommand:
         parser.print_usage()
