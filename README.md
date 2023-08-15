@@ -56,21 +56,19 @@ After answering a few questions you should have your first jail up and running!
 
 In order to start a jail automatically after TrueNAS boots, run `jlmkr start myjail` as Post Init Script with Type `Command` from the TrueNAS web interface. If you want to automatically install systemd-nspawn if it's not already installed (recommended to keep working after a TrueNAS SCALE update) then you may use a command such as this instead: `/mnt/mypool/jailmaker/jlmkr.py install && jlmkr start myjail`.
 
-## Additional Commands
-
-### Start Jail
+## Start Jail
 
 ```shell
 jlmkr start myjail
 ```
 
-### List Jails
+## List Jails
 
 ```shell
 jlmkr list
 ```
 
-### Edit Jail Config
+## Edit Jail Config
 
 ```shell
 jlmkr edit myjail
@@ -78,37 +76,39 @@ jlmkr edit myjail
 
 Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file, e.g. using the `jlmkr edit myjail` command (which uses the nano text editor). You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
-### Remove Jail
+## Remove Jail
 
 ```shell
 jlmkr remove myjail
 ```
 
-For additional commands we can use `machinectl`, `systemctl` and `journalctl` directly. The `jlmkr.py` script does not play a role here.
-
-### Stop Jail
+## Stop Jail
 
 ```shell
-machinectl stop myjail
+jlmkr stop myjail
 ```
 
-### Jail Shell
+## Jail Shell
 
 ```shell
-machinectl shell myjail
+jlmkr shell myjail
 ```
 
-### Jail Status
+## Jail Status
 
 ```shell
-systemctl status jlmkr-myjail
+jlmkr status myjail
 ```
 
-### Jail Logs
+## Jail Logs
 
 ```shell
-journalctl -u jlmkr-myjail
+jlmkr log myjail
 ```
+
+## Additional Commands
+
+Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their capabilities. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
 
 ### Run Command in Jail
 
