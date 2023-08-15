@@ -586,7 +586,7 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         """))
 
         if agree('Show the man page for systemd-nspawn?', 'n'):
-            os.system("man systemd-nspawn")
+            subprocess.run(['man', 'systemd-nspawn'])
         else:
             base_os_version = platform.freedesktop_os_release().get('VERSION_CODENAME', release)
             print(dedent(f"""
@@ -803,7 +803,7 @@ def edit_jail(jail_name):
                 eprint(f"Unable to edit config file: {jail_config_path}.")
                 eprint(f"The {TEXT_EDITOR} text editor is not available.")
             else:
-                os.system(f'{TEXT_EDITOR} {get_jail_config_path(jail_name)}')
+                subprocess.run([TEXT_EDITOR, get_jail_config_path(jail_name)])
                 if jail_is_running(jail_name):
                     print("\nRestart the jail for edits to apply (if you made any).")
 
