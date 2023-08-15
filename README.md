@@ -68,6 +68,20 @@ jlmkr start myjail
 jlmkr list
 ```
 
+## Execute Command in Jail
+
+You may want to execute a command inside a jail, for example from a shell script or a CRON job. The example below executes the `env` command inside the jail.
+
+```shell
+jlmkr exec myjail env
+```
+
+This example executes bash inside the jail with a command as additional argument.
+
+```shell
+jlmkr exec myjail bash -c 'echo test; echo $RANDOM;'
+```
+
 ## Edit Jail Config
 
 ```shell
@@ -109,14 +123,6 @@ jlmkr log myjail
 ## Additional Commands
 
 Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their capabilities. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
-
-### Run Command in Jail
-
-If you want to run a command inside a jail, for example from a shell script or a CRON job, you may use `systemd-run` with the `--machine` flag. The example below runs the `env` command inside the jail.
-
-```
-systemd-run --machine myjail --quiet --pipe --wait --collect --service-type=exec env
-```
 
 ## Networking
 

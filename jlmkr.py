@@ -172,9 +172,17 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     systemd_nspawn_additional_args += nvidia_mounts
 
 
+def exec_jail(jail_name, cmd, args):
+    """
+    Execute a command in the jail with given name.
+    """
+    subprocess.run(['systemd-run', '--machine', jail_name, '--quiet', '--pipe',
+                   '--wait', '--collect', '--service-type=exec', cmd] + args, check=True)
+
+
 def status_jail(jail_name):
     """
-    Show the status of the systemd service wrapping the jail.
+    Show the status of the systemd service wrapping the jail with given name.
     """
     # Alternatively `machinectl status jail_name` could be used
     subprocess.run(["systemctl", "status", f"{SYMLINK_NAME}-{jail_name}"])
@@ -987,6 +995,11 @@ def main():
                           help='open shell in running jail').add_argument(
         'name', help='name of the jail')
 
+    exec_parser = subparsers.add_parser(name='exec', epilog=DISCLAIMER,
+                                        help='execute a command in the jail')
+    exec_parser.add_argument('name', help='name of the jail')
+    exec_parser.add_argument('cmd', help='command to execute')
+
     subparsers.add_parser(name='status', epilog=DISCLAIMER,
                           help='show jail status').add_argument(
         'name', help='name of the jail')
@@ -1023,13 +1036,16 @@ def main():
     # Work relative to this script
     os.chdir(SCRIPT_DIR_PATH)
 
-    args = parser.parse_args()
+    args, additional_args = parser.parse_known_args()
 
     if args.subcommand == 'start':
         start_jail(args.name)
 
     elif args.subcommand == 'shell':
         shell_jail(args.name)
+
+    elif args.subcommand == 'exec':
+        exec_jail(args.name, args.cmd, additional_args)
 
     elif args.subcommand == 'status':
         status_jail(args.name)
