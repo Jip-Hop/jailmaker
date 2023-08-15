@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-from collections import defaultdict
 import configparser
 import contextlib
 import ctypes
@@ -19,6 +18,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from collections import defaultdict
 from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
