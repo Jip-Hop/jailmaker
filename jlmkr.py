@@ -172,11 +172,25 @@ def passthrough_nvidia(gpu_passthrough_nvidia, systemd_nspawn_additional_args, j
     systemd_nspawn_additional_args += nvidia_mounts
 
 
+def status_jail(jail_name):
+    """
+    Show the status of the systemd service wrapping the jail.
+    """
+    # Alternatively `machinectl status jail_name` could be used
+    subprocess.run(["systemctl", "status", f"{SYMLINK_NAME}-{jail_name}"])
+
+
+def log_jail(jail_name):
+    """
+    Show the log file of the jail with given name.
+    """
+    subprocess.run(["journalctl", "-u", f"{SYMLINK_NAME}-{jail_name}"])
+
+
 def shell_jail(jail_name):
     """
     Open a shell in the jail with given name.
     """
-
     subprocess.run(["machinectl", "shell", jail_name])
 
 
@@ -184,7 +198,6 @@ def stop_jail(jail_name):
     """
     Stop jail with given name.
     """
-
     subprocess.run(["machinectl", "poweroff", jail_name])
 
 
@@ -192,9 +205,10 @@ def start_jail(jail_name):
     """
     Start jail with given name.
     """
-    
+
     if jail_is_running(jail_name):
-        fail(f"Skipped starting jail {jail_name}. It appears to be running already...")
+        fail(
+            f"Skipped starting jail {jail_name}. It appears to be running already...")
 
     jail_path = get_jail_path(jail_name)
     jail_config_path = get_jail_config_path(jail_name)
@@ -321,12 +335,6 @@ def start_jail(jail_name):
         """))
 
     print(dedent(f"""
-        Check logging:
-        journalctl -u {SYMLINK_NAME}-{jail_name}
-
-        Check status:
-        systemctl status {SYMLINK_NAME}-{jail_name}
-
         Get a shell:
         {os.path.basename(__file__)} shell {jail_name}
     """))
@@ -979,6 +987,14 @@ def main():
                           help='open shell in running jail').add_argument(
         'name', help='name of the jail')
 
+    subparsers.add_parser(name='status', epilog=DISCLAIMER,
+                          help='show jail status').add_argument(
+        'name', help='name of the jail')
+
+    subparsers.add_parser(name='log', epilog=DISCLAIMER,
+                          help='show jail log').add_argument(
+        'name', help='name of the jail')
+
     subparsers.add_parser(name='stop', epilog=DISCLAIMER,
                           help='stop a running jail').add_argument(
         'name', help='name of the jail')
@@ -1014,6 +1030,12 @@ def main():
 
     elif args.subcommand == 'shell':
         shell_jail(args.name)
+
+    elif args.subcommand == 'status':
+        status_jail(args.name)
+
+    elif args.subcommand == 'log':
+        log_jail(args.name)
 
     elif args.subcommand == 'stop':
         stop_jail(args.name)
