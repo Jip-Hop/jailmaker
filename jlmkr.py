@@ -7,6 +7,7 @@ import ctypes
 import glob
 import hashlib
 import os
+import platform
 import re
 import readline
 import shlex
@@ -444,7 +445,7 @@ def check_jail_name_available(jail_name, warn=True):
     return False
 
 
-def create_jail(jail_name):
+def create_jail(jail_name, distro='debian', release='bullseye'):
     """
     Create jail with given name.
     """
@@ -475,7 +476,7 @@ def create_jail(jail_name):
     stat_chmod(JAILS_DIR_PATH, 0o700)
 
     print()
-    if not agree("Install the recommended distro (Debian 11)?", 'y'):
+    if not agree(f"Install the recommended image ({distro} {release})?", 'y'):
         print(dedent(f"""
             {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
 
@@ -558,9 +559,10 @@ def create_jail(jail_name):
         if agree('Show the man page for systemd-nspawn?', 'n'):
             os.system("man systemd-nspawn")
         else:
+            base_os_version = platform.freedesktop_os_release().get('VERSION_CODENAME', release)
             print(dedent(f"""
                 You may read the systemd-nspawn manual online:
-                https://manpages.debian.org/{release}/systemd-container/systemd-nspawn.1.en.html"""))
+                https://manpages.debian.org/{base_os_version}/systemd-container/systemd-nspawn.1.en.html"""))
 
         # Backslashes and colons need to be escaped in bind mount options:
         # e.g. to bind mount a file called:
