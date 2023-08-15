@@ -792,8 +792,8 @@ def edit_jail(jail_name):
         else:
             jail_config_path = get_jail_config_path(jail_name)
             if not shutil.which(TEXT_EDITOR):
-                print(f"Unable to edit config file: {jail_config_path}.")
-                print(f"The {TEXT_EDITOR} text editor is not available.")
+                eprint(f"Unable to edit config file: {jail_config_path}.")
+                eprint(f"The {TEXT_EDITOR} text editor is not available.")
             else:
                 os.system(f'{TEXT_EDITOR} {get_jail_config_path(jail_name)}')
                 if jail_is_running(jail_name):
