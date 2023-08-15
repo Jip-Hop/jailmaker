@@ -870,29 +870,30 @@ def main():
     subparsers = parser.add_subparsers(
         title='commands', dest='subcommand', metavar="")
 
-    create_parser = subparsers.add_parser(
-        name='create', epilog=DISCLAIMER, help='create a new jail')
-    create_parser.add_argument('name', nargs='?', help='name of the jail')
+    subparsers.add_parser(name='install', epilog=DISCLAIMER,
+                          help='install jailmaker dependencies and create symlink')
 
-    start_parser = subparsers.add_parser(
-        name='start', epilog=DISCLAIMER, help='start a previously created jail')
-    start_parser.add_argument('name', help='name of the jail')
+    subparsers.add_parser(name='create', epilog=DISCLAIMER,
+                          help='create a new jail').add_argument(
+        'name', nargs='?', help='name of the jail')
 
-    subparsers.add_parser(name='edit', epilog=DISCLAIMER).add_argument(
+    subparsers.add_parser(name='start', epilog=DISCLAIMER,
+                          help='start a previously created jail').add_argument(
+        'name', help='name of the jail')
+
+    subparsers.add_parser(name='edit', epilog=DISCLAIMER,
+                          help='edit jail config with nano text editor').add_argument(
         'name', help='name of the jail to edit')
 
-    subparsers.add_parser(name='remove', epilog=DISCLAIMER).add_argument(
+    subparsers.add_parser(name='remove', epilog=DISCLAIMER,
+                          help='remove a previously created jail').add_argument(
         'name', help='name of the jail to remove')
 
-    subparsers.add_parser(name='list', epilog=DISCLAIMER)
+    subparsers.add_parser(name='list', epilog=DISCLAIMER,
+                          help='list jails (created and running)')
 
-    subparsers.add_parser(name='install', epilog=DISCLAIMER,
-                          help="Install jailmaker dependencies and create symlink")
-
-    images_parser = subparsers.add_parser(
-        name='images', epilog=DISCLAIMER, help='show the list of images available to create jails from')
-
-    # parser.usage = f"{parser.format_usage()[7:]}{create_parser.format_usage()}{start_parser.format_usage()}{images_parser.format_usage()}"
+    subparsers.add_parser(name='images', epilog=DISCLAIMER,
+                          help='list available images to create jails from')
 
     if os.getuid() != 0:
         parser.print_usage()
