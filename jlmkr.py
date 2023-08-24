@@ -39,7 +39,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.10'
+VERSION = '0.0.11'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -625,7 +625,10 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         if agree('Show the man page for systemd-nspawn?', 'n'):
             subprocess.run(['man', 'systemd-nspawn'])
         else:
-            base_os_version = platform.freedesktop_os_release().get('VERSION_CODENAME', release)
+            try:
+                base_os_version = platform.freedesktop_os_release().get('VERSION_CODENAME', release)
+            except AttributeError:
+                base_os_version = release
             print(dedent(f"""
                 You may read the systemd-nspawn manual online:
                 https://manpages.debian.org/{base_os_version}/systemd-container/systemd-nspawn.1.en.html"""))
