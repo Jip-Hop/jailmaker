@@ -18,7 +18,7 @@ Add the following argument to the "additional flags" prompt of jail creation or 
 
 ### Setting a Static IP
 To set a Static IP you need to disable DHCP in the macvlan config file `/etc/systemd/network/mv-dhcp.network`
-You can do this with a network client like WinSCP by navigating into the jail's filesystem then the path above, or by using a text editing program like nano by running `nano /etc/systemd/network/mv-dhcp.network' in the jail's shell.
+You can do this with a network client like WinSCP by navigating into the jail's filesystem then the path above, or by using a text editing program like nano by running `nano /etc/systemd/network/mv-dhcp.network` in the jail's shell.
 
 The DHCP in [Network] needs to be set to false, an Address (static IP) needs to be added, a Gateway needs to be defined (e.g your router such as 192.168.0.1) and the entire DHCP section needs to be removed.
 
