@@ -640,8 +640,14 @@ def create_jail(jail_name, distro='debian', release='bullseye'):
         # --bind-ro='/mnt/data/weird chars \:?\\"'
 
         print(dedent("""
-            For example to mount directories inside the jail you may add:
-            --bind='/mnt/data/a writable directory/' --bind-ro='/mnt/data/a readonly directory/'
+            Would you like to add additional systemd-nspawn flags?
+            For example to mount directories inside the jail you may:
+            Mount the TrueNAS location /mnt/pool/dataset to the /home directory of the jail with:
+            --bind='/mnt/pool/dataset:/home'
+            Or the same, but readonly, with:
+            --bind-ro='/mnt/pool/dataset:/home'
+            Or create MACVLAN interface for static IP, with:
+            --network-macvlan=eno1 --resolv-conf=bind-host
         """))
 
         # Enable tab auto completion of file paths after the = symbol
