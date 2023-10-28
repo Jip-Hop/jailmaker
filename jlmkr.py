@@ -39,7 +39,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '0.0.11'
+VERSION = '1.0.0'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -512,7 +512,7 @@ def check_jail_name_available(jail_name, warn=True):
     return False
 
 
-def create_jail(jail_name, distro='debian', release='bullseye'):
+def create_jail(jail_name, distro='debian', release='bookworm'):
     """
     Create jail with given name.
     """

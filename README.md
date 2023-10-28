@@ -5,7 +5,6 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 ## Disclaimer
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.**
-**THIS SCRIPT NEEDS MORE COMMUNITY TESTING BEFORE ITS FIRST 1.0.0 RELEASE.**
 
 ## Summary
 
@@ -13,7 +12,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 
 - Installing the systemd-container package (which includes systemd-nspawn)
 - Setting up the jail so it won't be lost when you update SCALE
-- Choosing a distro (Debian 11 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
+- Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Optional: configuring the jail so you can run Docker inside it
 - Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
 - Starting the jail with your config applied
@@ -143,6 +142,10 @@ To make passthrough of the nvidia GPU work, you need to schedule a Pre Init comm
 ```
 [ ! -f /dev/nvidia-uvm ] && modprobe nvidia-current-uvm && /usr/bin/nvidia-modprobe -c0 -u
 ```
+
+## Documentation
+
+Additional documentation contributed by the community can be found in [the docs directory](./docs/).
 
 ## Comparison
 
