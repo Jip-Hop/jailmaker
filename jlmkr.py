@@ -39,7 +39,7 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
 DESCRIPTION = "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
     via bind mounts, thanks to systemd-nspawn!"
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 JAILS_DIR_PATH = 'jails'
 JAIL_CONFIG_NAME = 'config'
@@ -765,10 +765,10 @@ def create_jail(jail_name, distro='debian', release='bookworm'):
 
                 # Override the default 80-container-host0.network file (by using the same name)
                 # This config applies when using the --network-bridge option of systemd-nspawn
-                # Disable LinkLocalAddressing or else the container won't get IP address via DHCP
-                # Enable DHCP only for ipv4 else systemd-networkd will complain that LinkLocalAddressing is disabled
+                # Disable LinkLocalAddressing on IPv4, or else the container won't get IP address via DHCP
+                # But keep it enabled on IPv6, as SLAAC and DHCPv6 both require a local-link address to function
                 print(Path(default_host0_network_file).read_text().replace("LinkLocalAddressing=yes",
-                      "LinkLocalAddressing=no").replace("DHCP=yes", "DHCP=ipv4"), file=open(override_network_file, 'w'))
+                      "LinkLocalAddressing=ipv6"), file=open(override_network_file, 'w'))
 
             # Setup DHCP for macvlan network interfaces
             # This config applies when using the --network-macvlan option of systemd-nspawn
@@ -779,8 +779,8 @@ def create_jail(jail_name, distro='debian', release='bookworm'):
                 Name=mv-*
 
                 [Network]
-                DHCP=ipv4
-                LinkLocalAddressing=no
+                DHCP=yes
+                LinkLocalAddressing=ipv6
 
                 [DHCPv4]
                 UseDNS=true
