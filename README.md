@@ -157,6 +157,7 @@ The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image ser
 
 ## References
 
+- [TrueNAS Forum Thread about Jailmaker](https://www.truenas.com/community/threads/linux-jails-experimental-script.106926/)
 - [systemd-nspawn](https://manpages.debian.org/bullseye/systemd-container/systemd-nspawn.1.en.html)
 - [machinectl](https://manpages.debian.org/bullseye/systemd-container/machinectl.1.en.html)
 - [systemd-run](https://manpages.debian.org/bullseye/systemd/systemd-run.1.en.html)
