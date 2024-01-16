@@ -44,7 +44,7 @@ Furthermore, if the configuration is not correct it can render your TrueNAS inac
 [TrueNAS Bridge interface guide](https://www.youtube.com/watch?v=7clQw132w58)
 May be helpful to connect a monitor and keyboard to the NAS and use /etc/netcli to reset the networking interface. Kept bothering with "Register Default Gateway" warning... I just clicked Cancel.
 
-Add the `--network-bridge=br1 --resolv-conf=bind-host systemd-nspawn` flag when asked for additional flags during jail creation, or set it post-creation by editing the `SYSTEMD_NSPAWN_USER_ARGS` variable inside the config file.
+Add the `--network-bridge=br1 --resolv-conf=bind-host` flag when asked for additional flags during jail creation, or set it post-creation by editing the `SYSTEMD_NSPAWN_USER_ARGS` variable inside the config file.
 
 ### Static IP
 To configure a static IP with our bridge interface, we need to edit the  `/etc/systemd/network/80-container-host0.network` file. Change the [Network] section to look like this:
