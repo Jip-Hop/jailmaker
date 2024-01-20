@@ -151,9 +151,19 @@ Additional documentation contributed by the community can be found in [the docs 
 
 TODO: write comparison between systemd-nspawn (without `jailmaker`), LXC, VMs, Docker (on the host).
 
-### Incompatible Distros
+## Incompatible Distros
 
 The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
+
+## Tips & Tricks
+
+### Colorized bash prompt
+
+To visually distinguish between a root shell inside the jail and a root shell outside the jail, it's possible to colorize the shell prompt. When using a debian jail with the bash shell, you may run the following command to get a yellow prompt inside the jail (will be activated the next time you run `jlmkr shell myjail`):
+
+```bash
+echo "PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '" >> ~/.bashrc
+```
 
 ## References
 
