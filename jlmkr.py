@@ -239,7 +239,7 @@ def start_jail(jail_name, check_startup_enabled=False):
     config = parse_config(jail_config_path)
 
     if not config:
-        fail(f'Aborting...')
+        fail("Aborting...")
 
     # Only start if the startup setting is enabled in the config
     if check_startup_enabled:
