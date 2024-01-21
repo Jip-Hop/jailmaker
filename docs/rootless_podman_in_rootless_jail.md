@@ -10,7 +10,7 @@ Prerequisites. Installed jailmaker and setup bridge networking.
 
 Run `jlmkr create rootless` to create a new jail. During jail creation choose fedora 39. This way we get the most recent version of podman available. Don't enable docker compatibility, we're going to enable only the required options manually.
 
-Add `systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --system-call-filter='add_key keyctl bpf' --private-users=524288:65536 --private-users-ownership=chown` during jail creation.
+Add `--network-bridge=br1 --resolv-conf=bind-host --system-call-filter='add_key keyctl bpf' --private-users=524288:65536 --private-users-ownership=chown` when asked for additional systemd-nspawn flags during jail creation.
 
 We start at UID 524288, as this is the [systemd range used for containers](https://github.com/systemd/systemd/blob/main/docs/UIDS-GIDS.md#summary).
 
