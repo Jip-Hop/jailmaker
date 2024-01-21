@@ -787,6 +787,14 @@ def create_jail(jail_name, distro='debian', release='bookworm'):
                 UseTimezone=true
             """), file=open(os.path.join(network_dir_path, "mv-dhcp.network"), "w"))
 
+            # Override preset which caused systemd-networkd to be disabled (e.g. fedora 39)
+            # https://www.freedesktop.org/software/systemd/man/latest/systemd.preset.html
+            # https://github.com/lxc/lxc-ci/blob/f632823ecd9b258ed42df40449ec54ed7ef8e77d/images/fedora.yaml#L312C5-L312C38
+            
+            preset_path = os.path.join(jail_rootfs_path, 'etc/systemd/system-preset')
+            os.makedirs(preset_path, exist_ok=True)
+            print('enable systemd-networkd.service', file=open(os.path.join(preset_path, '00-jailmaker.preset'), "w"))
+
         # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
         # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
         # Use TasksMax=infinity since this is what docker does:
