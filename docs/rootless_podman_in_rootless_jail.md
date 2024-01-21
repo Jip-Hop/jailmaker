@@ -30,8 +30,8 @@ Start the jail with `jlmkr start rootless` and open a shell session inside the j
 
 Then inside the jail start the network services (wait to get IP address via DHCP) and install podman:
 ```bash
-systemctl  enable  systemd-networkd
-systemctl  start   systemd-networkd
+# systemd-networkd should already be enabled when using jlmkr.py from the develop branch
+systemctl --now enable systemd-networkd
 
 # Add the required capabilities to the `newuidmap` and `newgidmap` binaries.
 # https://github.com/containers/podman/issues/2788#issuecomment-1016301663
