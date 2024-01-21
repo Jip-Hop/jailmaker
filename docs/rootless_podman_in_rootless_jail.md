@@ -23,7 +23,7 @@ After the jail has started run `jlmkr stop rootless && jlmkr edit rootless`, rem
 The flags look like this now:
 
 ```
-systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --system-call-filter='add_key keyctl bpf --private-users=524288:131072'
+systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --system-call-filter='add_key keyctl bpf' --private-users=524288:131072
 ```
 
 For some reason the network inside the jail doesn't come up by default. Correct this manually.
