@@ -26,15 +26,6 @@ The flags look like this now:
 systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --system-call-filter='add_key keyctl bpf' --private-users=524288:131072
 ```
 
-For some reason the network inside the jail doesn't come up by default. Correct this manually.
-
-Run the following from the TrueNAS host, from inside your jailmaker directory.
-
-```bash
-nano jails/rootless/rootfs/lib/systemd/network/80-container-host0.network
-# Manually set LinkLocalAddressing=yes to LinkLocalAddressing=ipv6
-```
-
 Start the jail with `jlmkr start rootless` and open a shell session inside the jail (as the remapped root user) with `jlmkr shell rootless`.
 
 Then inside the jail start the network services (wait to get IP address via DHCP) and install podman:
