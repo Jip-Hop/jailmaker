@@ -356,12 +356,12 @@ def start_jail(jail_name, check_startup_enabled=False):
         #
         # Workaround: https://github.com/kinvolk/kube-spawn/pull/328
         #
-        # However, it seems like the DeviceAllow= workaround may break in
-        # a future Debian release with systemd version 250 or higher
+        # As of 26-3-2024 on TrueNAS-SCALE-23.10.1.1 it seems to no longer be
+        # required to use DevicePolicy=auto
+        # Docker can successfully pull the ljishen/sysbench test image
+        # Running mknod /dev/port c 1 4 manually works too...
+        # Unknown why this suddenly started working...
         # https://github.com/systemd/systemd/issues/21987
-        #
-        # As of 29-1-2023 it still works with debian bookworm (nightly) and sid
-        # using the latest systemd version 252.4-2 so I think we're good!
         #
         # Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
 
