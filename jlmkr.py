@@ -329,7 +329,8 @@ def start_jail(jail_name, check_startup_enabled=False):
     #   - privileged (to disable seccomp, set DevicePolicy=auto and add all capabilities)
     #   - how to call the option to enable ip_forward and bridge-nf-call?
     # TODO: always add --bind-ro=/sys/module? Or only for privileged jails?
-
+    # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
+    
     if config.get("docker_compatible") == "1":
         # Enable ip forwarding on the host (docker needs it)
         print(1, file=open("/proc/sys/net/ipv4/ip_forward", "w"))
