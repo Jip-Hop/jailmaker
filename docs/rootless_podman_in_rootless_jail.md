@@ -42,6 +42,8 @@ setcap cap_setgid+eip /usr/bin/newgidmap
 
 # Create new user
 adduser rootless
+# Set password for user
+passwd rootless
 
 # Clear the subuids and subgids which have been assigned by default when creating the new user
 usermod --del-subuids 0-4294967295 --del-subgids 0-4294967295 rootless
@@ -85,6 +87,20 @@ The output of podman info should contain:
     Supports volatile: "true"
     Using metacopy: "false"
 ```
+
+## Cockpit management
+
+Inside the rootless jail run (as root user):
+
+```bash
+dnf install cockpit cockpit-podman
+systemctl enable --now cockpit.socket
+ip a
+```
+
+Check the IP address of the jail and access the Cockpit web interface at https://0.0.0.0:9090 where 0.0.0.0 is the IP address you just found using `ip a`.
+
+Then login as user `rootless` with the password you've created earlier. Click on `Podman containers`. In case it shows `Podman service is not active` then click `Start podman`. You can now manage your rootless podman containers in the rootless jailmaker jail using the Cockpit web GUI.
 
 ## TODO:
 On truenas host do:
