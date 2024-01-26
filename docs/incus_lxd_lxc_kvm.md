@@ -76,3 +76,7 @@ root@incus:/home/test# dd if=/dev/random of=./test2.img bs=1G count=1 oflag=dsyn
 ## Create Ubuntu container
 
 To be able to create unprivileged (rootless) containers with incus inside the jail, you need to increase the amount of UIDs available inside the jail. Please refer to the [Podman instructions](rootless_podman_in_rootless_jail.md) for more information. If you don't increase the UIDs you can only create privileged containers. You'd have to change `Privileged` to `Allow` in `Security policies` in this case.
+
+## References
+
+- [Running QEMU/KVM Virtual Machines in Unprivileged LXD Containers](https://dshcherb.github.io/2017/12/04/qemu-kvm-virtual-machines-in-unprivileged-lxd.html)
