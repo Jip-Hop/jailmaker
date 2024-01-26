@@ -104,6 +104,17 @@ def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
 def passthrough_nvidia(
     gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_name
 ):
+    # Load the nvidia kernel module
+    if subprocess.run(["modprobe", "nvidia-current-uvm"]).returncode != 0:
+        eprint(
+            dedent(
+                """
+            Failed to load nvidia-current-uvm kernel module.
+            Skip passthrough of nvidia GPU."""
+            )
+        )
+        return
+
     jail_rootfs_path = get_jail_rootfs_path(jail_name)
     ld_so_conf_path = Path(
         os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
@@ -114,13 +125,11 @@ def passthrough_nvidia(
         ld_so_conf_path.unlink(missing_ok=True)
         return
 
-    try:
         # Run nvidia-smi to initialize the nvidia driver
         # If we can't run nvidia-smi successfully,
         # then nvidia-container-cli list will fail too:
         # we shouldn't continue with gpu passthrough
-        subprocess.run(["nvidia-smi", "-f", "/dev/null"], check=True)
-    except:
+    if subprocess.run(["nvidia-smi", "-f", "/dev/null"]).returncode != 0:
         eprint("Skip passthrough of nvidia GPU.")
         return
 
@@ -315,6 +324,11 @@ def start_jail(jail_name, check_startup_enabled=False):
         f"--machine={jail_name}",
         f"--directory={JAIL_ROOTFS_NAME}",
     ]
+
+    # TODO: split the docker_compatible option into separate options
+    #   - privileged (to disable seccomp, set DevicePolicy=auto and add all capabilities)
+    #   - how to call the option to enable ip_forward and bridge-nf-call?
+    # TODO: always add --bind-ro=/sys/module? Or only for privileged jails?
 
     if config.get("docker_compatible") == "1":
         # Enable ip forwarding on the host (docker needs it)
@@ -712,15 +726,16 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
 
         gpu_passthrough_nvidia = 0
 
-        try:
+        if (
             subprocess.run(
-                ["nvidia-smi"],
-                check=True,
+                ["modprobe", "nvidia-current-uvm"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-            )
+            ).returncode
+            == 0
+        ):
             nvidia_detected = True
-        except:
+        else:
             nvidia_detected = False
 
         if nvidia_detected:

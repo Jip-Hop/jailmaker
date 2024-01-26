@@ -135,14 +135,6 @@ See [Advanced Networking](./NETWORKING.md) for more.
 
 The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
 
-## Nvidia GPU
-
-To make passthrough of the nvidia GPU work, you need to schedule a Pre Init command. The reason is that TrueNAS SCALE by default doesn't load the nvidia kernel modules (and `jailmaker` doesn't do that either). [This screenshot](https://user-images.githubusercontent.com/1704047/222915803-d6dd51b0-c4dd-4189-84be-a04d38cca0b3.png) shows what the configuration should look like.
-
-```
-[ ! -f /dev/nvidia-uvm ] && modprobe nvidia-current-uvm && /usr/bin/nvidia-modprobe -c0 -u
-```
-
 ## Documentation
 
 Additional documentation contributed by the community can be found in [the docs directory](./docs/).
