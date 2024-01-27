@@ -329,6 +329,13 @@ def start_jail(jail_name, check_startup_enabled=False):
 
     # TODO: split the docker_compatible option into separate options
     #   - privileged (to disable seccomp, set DevicePolicy=auto and add all capabilities)
+    #   "The bottom line is that using the --privileged flag does not tell the container
+    #   engines to add additional security constraints. The --privileged flag does not add
+    #   any privilege over what the processes launching the containers have."
+    #   "Container engines user namespace is not affected by the --privileged flag"
+    #   Meaning in the context of systemd-nspawn I could have a privileged option,
+    #   which would also apply to jails with --private-users (user namespacing)
+    #   https://www.redhat.com/sysadmin/privileged-flag-container-engines
     #   - how to call the option to enable ip_forward and bridge-nf-call?
     #   - add CSV value for preloading kernel modules like linux.kernel_modules in LXC
 
