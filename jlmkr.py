@@ -389,7 +389,6 @@ def start_jail(jail_name, check_startup_enabled=False):
         # Add additional flags required for docker
         systemd_nspawn_additional_args += [
             "--capability=all",
-            "--system-call-filter=add_key keyctl bpf",
         ]
 
     # Legacy gpu_passthrough config setting
@@ -978,7 +977,12 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             "--setenv=SYSTEMD_NSPAWN_LOCK=0",
         ]
 
-        systemd_nspawn_default_args = ["--keep-unit", "--quiet", "--boot", "--bind-ro=/sys/module"]
+        systemd_nspawn_default_args = [
+            "--keep-unit",
+            "--quiet",
+            "--boot",
+            "--bind-ro=/sys/module",
+        ]
 
         config = cleandoc(
             f"""
