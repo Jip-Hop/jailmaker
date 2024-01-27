@@ -14,6 +14,8 @@
 
 Create a debian 12 jail and [install incus](https://github.com/zabbly/incus#installation). Also install the `incus-ui-canonical` package to install the web interface. Ensure the config file looks like the below:
 
+Run `modprobe vhost_vsock` on the TrueNAS host.
+
 ```
 startup=0
 docker_compatible=1
@@ -24,8 +26,6 @@ systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --bind=/de
 systemd_run_default_args=--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133 --property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=infinity --collect --setenv=SYSTEMD_NSPAWN_LOCK=0
 systemd_nspawn_default_args=--keep-unit --quiet --boot
 ```
-
-Run `modprobe vhost_vsock` on the TrueNAS host. TODO: Check if this is really required.
 
 Check out [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
 
