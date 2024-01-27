@@ -324,7 +324,6 @@ def start_jail(jail_name, check_startup_enabled=False):
     # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
     systemd_nspawn_additional_args = [
         f"--machine={jail_name}",
-        "--bind-ro=/sys/module",
         f"--directory={JAIL_ROOTFS_NAME}",
     ]
 
@@ -979,7 +978,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             "--setenv=SYSTEMD_NSPAWN_LOCK=0",
         ]
 
-        systemd_nspawn_default_args = ["--keep-unit", "--quiet", "--boot"]
+        systemd_nspawn_default_args = ["--keep-unit", "--quiet", "--boot", "--bind-ro=/sys/module"]
 
         config = cleandoc(
             f"""
