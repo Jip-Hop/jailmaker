@@ -104,6 +104,16 @@ def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
 def passthrough_nvidia(
     gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_name
 ):
+    jail_rootfs_path = get_jail_rootfs_path(jail_name)
+    ld_so_conf_path = Path(
+        os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
+    )
+
+    if gpu_passthrough_nvidia != "1":
+        # Cleanup the config file we made when passthrough was enabled
+        ld_so_conf_path.unlink(missing_ok=True)
+        return
+
     # Load the nvidia kernel module
     if subprocess.run(["modprobe", "nvidia-current-uvm"]).returncode != 0:
         eprint(
@@ -115,20 +125,10 @@ def passthrough_nvidia(
         )
         return
 
-    jail_rootfs_path = get_jail_rootfs_path(jail_name)
-    ld_so_conf_path = Path(
-        os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
-    )
-
-    if gpu_passthrough_nvidia != "1":
-        # Cleanup the config file we made when passthrough was enabled
-        ld_so_conf_path.unlink(missing_ok=True)
-        return
-
-        # Run nvidia-smi to initialize the nvidia driver
-        # If we can't run nvidia-smi successfully,
-        # then nvidia-container-cli list will fail too:
-        # we shouldn't continue with gpu passthrough
+    # Run nvidia-smi to initialize the nvidia driver
+    # If we can't run nvidia-smi successfully,
+    # then nvidia-container-cli list will fail too:
+    # we shouldn't continue with gpu passthrough
     if subprocess.run(["nvidia-smi", "-f", "/dev/null"]).returncode != 0:
         eprint("Skip passthrough of nvidia GPU.")
         return
