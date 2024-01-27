@@ -19,7 +19,7 @@ startup=0
 docker_compatible=1
 gpu_passthrough_intel=1
 gpu_passthrough_nvidia=0
-systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --bind=/dev/fuse --bind=/dev/kvm --bind=/dev/vsock --bind=/dev/vhost-vsock --bind-ro=/sys/module
+systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --bind=/dev/fuse --bind=/dev/kvm --bind=/dev/vsock --bind=/dev/vhost-vsock
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133 --property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=infinity --collect --setenv=SYSTEMD_NSPAWN_LOCK=0
 systemd_nspawn_default_args=--keep-unit --quiet --boot

@@ -320,16 +320,18 @@ def start_jail(jail_name, check_startup_enabled=False):
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
+    # Always add --bind-ro=/sys/module to make lsmod happy
+    # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
     systemd_nspawn_additional_args = [
         f"--machine={jail_name}",
+        "--bind-ro=/sys/module",
         f"--directory={JAIL_ROOTFS_NAME}",
     ]
 
     # TODO: split the docker_compatible option into separate options
     #   - privileged (to disable seccomp, set DevicePolicy=auto and add all capabilities)
     #   - how to call the option to enable ip_forward and bridge-nf-call?
-    # TODO: always add --bind-ro=/sys/module? Or only for privileged jails?
-    # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
+    #   - add CSV value for preloading kernel modules like linux.kernel_modules in LXC
 
     if config.get("docker_compatible") == "1":
         # Enable ip forwarding on the host (docker needs it)
