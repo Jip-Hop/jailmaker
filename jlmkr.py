@@ -320,8 +320,6 @@ def start_jail(jail_name, check_startup_enabled=False):
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
-    # Always add --bind-ro=/sys/module to make lsmod happy
-    # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
     systemd_nspawn_additional_args = [
         f"--machine={jail_name}",
         f"--directory={JAIL_ROOTFS_NAME}",
@@ -984,6 +982,8 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             "--setenv=SYSTEMD_NSPAWN_LOCK=0",
         ]
 
+        # Always add --bind-ro=/sys/module to make lsmod happy
+        # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
         systemd_nspawn_default_args = [
             "--keep-unit",
             "--quiet",
