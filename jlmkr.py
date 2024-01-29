@@ -989,6 +989,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             "--quiet",
             "--boot",
             "--bind-ro=/sys/module",
+            "--inaccessible=/sys/module/apparmor",
         ]
 
         config = cleandoc(
