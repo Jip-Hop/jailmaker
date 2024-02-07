@@ -223,20 +223,21 @@ def exec_jail(jail_name, cmd, args):
     """
     Execute a command in the jail with given name.
     """
-    subprocess.run(
-        [
-            "systemd-run",
-            "--machine",
-            jail_name,
-            "--quiet",
-            "--pipe",
-            "--wait",
-            "--collect",
-            "--service-type=exec",
-            cmd,
-        ]
-        + args,
-        check=True,
+    sys.exit(
+        subprocess.run(
+            [
+                "systemd-run",
+                "--machine",
+                jail_name,
+                "--quiet",
+                "--pipe",
+                "--wait",
+                "--collect",
+                "--service-type=exec",
+                cmd,
+            ]
+            + args
+        ).returncode
     )
 
 
