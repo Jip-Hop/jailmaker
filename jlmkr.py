@@ -434,9 +434,7 @@ def start_jail(jail_name, check_startup_enabled=False):
         )
     )
 
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
+    if subprocess.run(cmd).returncode != 0:
         fail(
             dedent(
                 f"""
