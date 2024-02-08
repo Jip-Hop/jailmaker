@@ -223,22 +223,20 @@ def exec_jail(jail_name, cmd, args):
     """
     Execute a command in the jail with given name.
     """
-    sys.exit(
-        subprocess.run(
-            [
-                "systemd-run",
-                "--machine",
-                jail_name,
-                "--quiet",
-                "--pipe",
-                "--wait",
-                "--collect",
-                "--service-type=exec",
-                cmd,
-            ]
-            + args
-        ).returncode
-    )
+    return subprocess.run(
+        [
+            "systemd-run",
+            "--machine",
+            jail_name,
+            "--quiet",
+            "--pipe",
+            "--wait",
+            "--collect",
+            "--service-type=exec",
+            cmd,
+        ]
+        + args
+    ).returncode
 
 
 def status_jail(jail_name):
@@ -246,28 +244,32 @@ def status_jail(jail_name):
     Show the status of the systemd service wrapping the jail with given name.
     """
     # Alternatively `machinectl status jail_name` could be used
-    subprocess.run(["systemctl", "status", f"{SYMLINK_NAME}-{jail_name}"])
+    return subprocess.run(
+        ["systemctl", "status", f"{SYMLINK_NAME}-{jail_name}"]
+    ).returncode
 
 
 def log_jail(jail_name):
     """
     Show the log file of the jail with given name.
     """
-    subprocess.run(["journalctl", "-u", f"{SYMLINK_NAME}-{jail_name}"])
+    return subprocess.run(
+        ["journalctl", "-u", f"{SYMLINK_NAME}-{jail_name}"]
+    ).returncode
 
 
-def shell_jail(jail_name):
+def shell_jail(args):
     """
     Open a shell in the jail with given name.
     """
-    subprocess.run(["machinectl", "shell", jail_name])
+    return subprocess.run(["machinectl", "shell"] + args).returncode
 
 
 def stop_jail(jail_name):
     """
     Stop jail with given name.
     """
-    subprocess.run(["machinectl", "poweroff", jail_name])
+    return subprocess.run(["machinectl", "poweroff", jail_name]).returncode
 
 
 def parse_config(jail_config_path):
@@ -293,7 +295,8 @@ def start_jail(jail_name, check_startup_enabled=False):
     )
 
     if not check_startup_enabled and jail_is_running(jail_name):
-        fail(skip_start_message)
+        eprint(skip_start_message)
+        return 1
 
     jail_path = get_jail_path(jail_name)
     jail_config_path = get_jail_config_path(jail_name)
@@ -301,7 +304,8 @@ def start_jail(jail_name, check_startup_enabled=False):
     config = parse_config(jail_config_path)
 
     if not config:
-        fail("Aborting...")
+        eprint("Aborting...")
+        return 1
 
     # Only start if the startup setting is enabled in the config
     if check_startup_enabled:
@@ -310,10 +314,10 @@ def start_jail(jail_name, check_startup_enabled=False):
             if jail_is_running(jail_name):
                 # ...but we can skip if it's already running
                 eprint(skip_start_message)
-                return
+                return 0
         else:
-            # Skip starting this jail since the startup config setting isnot enabled
-            return
+            # Skip starting this jail since the startup config setting is not enabled
+            return 0
 
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
@@ -434,8 +438,9 @@ def start_jail(jail_name, check_startup_enabled=False):
         )
     )
 
-    if subprocess.run(cmd).returncode != 0:
-        fail(
+    returncode = subprocess.run(cmd).returncode
+    if returncode != 0:
+        eprint(
             dedent(
                 f"""
             Failed to start jail {jail_name}...
@@ -444,6 +449,8 @@ def start_jail(jail_name, check_startup_enabled=False):
         """
             )
         )
+
+    return returncode
 
 
 def cleanup(jail_path):
@@ -505,7 +512,8 @@ def run_lxc_download_script(
             lxc_download_script,
         )
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
-            fail("Abort! Downloaded script has unexpected contents.")
+            eprint("Abort! Downloaded script has unexpected contents.")
+            return 1
 
     stat_chmod(lxc_download_script, 0o700)
 
@@ -541,7 +549,10 @@ def run_lxc_download_script(
     p1.wait()
 
     if check_exit_code and p1.returncode != 0:
-        fail("Aborting...")
+        eprint("Aborting...")
+        return p1.returncode
+
+    return 0
 
 
 def stat_chmod(file_path, mode):
@@ -625,7 +636,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
     print(DISCLAIMER)
 
     if os.path.basename(os.getcwd()) != "jailmaker":
-        fail(
+        eprint(
             dedent(
                 f"""
             {COMMAND_NAME} needs to create files.
@@ -634,6 +645,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
             )
         )
+        return 1
 
     if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
         print(
@@ -649,7 +661,8 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             )
         )
         if not agree("Do you wish to ignore this warning and continue?", "n"):
-            fail("Aborting...")
+            eprint("Aborting...")
+            return 0
 
     # Create the dir where to store the jails
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
@@ -671,7 +684,9 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
         input("Press Enter to continue...")
         print()
 
-        run_lxc_download_script()
+        returncode = run_lxc_download_script()
+        if returncode != 0:
+            return returncode
 
         print(
             dedent(
@@ -834,7 +849,11 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
         # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        run_lxc_download_script(jail_name, jail_path, jail_rootfs_path, distro, release)
+        returncode = run_lxc_download_script(
+            jail_name, jail_path, jail_rootfs_path, distro, release
+        )
+        if returncode != 0:
+            return returncode
 
         # Assuming the name of your jail is "myjail"
         # and "machinectl shell myjail" doesn't work
@@ -887,7 +906,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             )
 
             if agree("Abort creating jail?", "y"):
-                exit(1)
+                return 1
 
         with contextlib.suppress(FileNotFoundError):
             # Remove config which systemd handles for us
@@ -1015,7 +1034,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
 
     print()
     if agree(f"Do you want to start jail {jail_name} right now?", "y"):
-        start_jail(jail_name)
+        return start_jail(jail_name)
 
 
 def jail_is_running(jail_name):
@@ -1033,18 +1052,34 @@ def edit_jail(jail_name):
     """
     Edit jail with given name.
     """
-    if check_jail_name_valid(jail_name):
-        if check_jail_name_available(jail_name, False):
-            eprint(f"A jail with name {jail_name} does not exist.")
-        else:
-            jail_config_path = get_jail_config_path(jail_name)
-            if not shutil.which(TEXT_EDITOR):
-                eprint(f"Unable to edit config file: {jail_config_path}.")
-                eprint(f"The {TEXT_EDITOR} text editor is not available.")
-            else:
-                subprocess.run([TEXT_EDITOR, get_jail_config_path(jail_name)])
-                if jail_is_running(jail_name):
-                    print("\nRestart the jail for edits to apply (if you made any).")
+
+    if not check_jail_name_valid(jail_name):
+        return 1
+
+    if check_jail_name_available(jail_name, False):
+        eprint(f"A jail with name {jail_name} does not exist.")
+        return 1
+
+    jail_config_path = get_jail_config_path(jail_name)
+    if not shutil.which(TEXT_EDITOR):
+        eprint(
+            f"Unable to edit config file: {jail_config_path}.",
+            f"\nThe {TEXT_EDITOR} text editor is not available",
+        )
+        return 1
+
+    returncode = subprocess.run(
+        [TEXT_EDITOR, get_jail_config_path(jail_name)]
+    ).returncode
+
+    if returncode != 0:
+        eprint("An error occurred while editing the jail config.")
+        return returncode
+
+    if jail_is_running(jail_name):
+        print("\nRestart the jail for edits to apply (if you made any).")
+
+    return 0
 
 
 def remove_jail(jail_name):
@@ -1052,28 +1087,31 @@ def remove_jail(jail_name):
     Remove jail with given name.
     """
 
-    if check_jail_name_valid(jail_name):
-        if check_jail_name_available(jail_name, False):
-            eprint(f"A jail with name {jail_name} does not exist.")
-        else:
-            check = (
-                input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
-                or ""
-            )
-            if check == jail_name:
-                jail_path = get_jail_path(jail_name)
-                if jail_is_running(jail_name):
-                    print(f"\nWait for {jail_name} to stop...", end="")
-                    stop_jail(jail_name)
-                    # Need to sleep since deleting immediately after stop causes problems...
-                    while jail_is_running(jail_name):
-                        time.sleep(1)
-                        print(".", end="", flush=True)
+    if not check_jail_name_valid(jail_name):
+        return 1
 
-                print(f"\nCleaning up: {jail_path}")
-                shutil.rmtree(jail_path)
-            else:
-                eprint("Wrong name, nothing happened.")
+    if check_jail_name_available(jail_name, False):
+        eprint(f"A jail with name {jail_name} does not exist.")
+        return 1
+
+    check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
+
+    if check == jail_name:
+        jail_path = get_jail_path(jail_name)
+        if jail_is_running(jail_name):
+            print(f"\nWait for {jail_name} to stop...", end="")
+            stop_jail(jail_name)
+            # Need to sleep since deleting immediately after stop causes problems...
+            while jail_is_running(jail_name):
+                time.sleep(1)
+                print(".", end="", flush=True)
+
+        print(f"\nCleaning up: {jail_path}")
+        shutil.rmtree(jail_path)
+        return 0
+    else:
+        eprint("Wrong name, nothing happened.")
+        return 1
 
 
 def print_table(header, list_of_objects, empty_value_indicator):
@@ -1106,7 +1144,7 @@ def run_command_and_parse_json(command):
         parsed_output = json.loads(output)
         return parsed_output
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON: {e}")
+        eprint(f"Error parsing JSON: {e}")
         return None
 
 
@@ -1131,7 +1169,7 @@ def list_jails():
 
     if not jail_names:
         print("No jails.")
-        return
+        return 0
 
     for jail in jail_names:
         jails[jail] = {"name": jail, "running": False}
@@ -1177,6 +1215,8 @@ def list_jails():
         empty_value_indicator,
     )
 
+    return 0
+
 
 def install_jailmaker():
     # Check if command exists in path
@@ -1220,12 +1260,23 @@ def install_jailmaker():
         print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
 
     print("Done installing jailmaker.")
+    
+    return 0
 
 
 def startup_jails():
-    install_jailmaker()
+    returncode = install_jailmaker()
+
+    if returncode != 0:
+        eprint("Failed to install jailmaker. Abort startup.")
+        return returncode
+
     for jail_name in get_all_jail_names():
-        start_jail(jail_name, True)
+        returncode = start_jail(jail_name, True)
+        eprint(f"Failed to start jail {jail_name}. Abort startup.")
+        return returncode
+
+    return 0
 
 
 def main():
@@ -1255,8 +1306,10 @@ def main():
     ).add_argument("name", help="name of the jail")
 
     subparsers.add_parser(
-        name="shell", epilog=DISCLAIMER, help="open shell in running jail"
-    ).add_argument("name", help="name of the jail")
+        name="shell",
+        epilog=DISCLAIMER,
+        help="open shell in running jail (alias for machinectl shell)",
+    )
 
     exec_parser = subparsers.add_parser(
         name="exec", epilog=DISCLAIMER, help="execute a command in the jail"
@@ -1313,48 +1366,48 @@ def main():
     args, additional_args = parser.parse_known_args()
 
     if args.subcommand == "install":
-        install_jailmaker()
+        sys.exit(install_jailmaker())
 
     elif args.subcommand == "create":
-        create_jail(args.name)
+        sys.exit(create_jail(args.name))
 
     elif args.subcommand == "start":
-        start_jail(args.name)
+        sys.exit(start_jail(args.name))
 
     elif args.subcommand == "shell":
-        shell_jail(args.name)
+        sys.exit(shell_jail(additional_args))
 
     elif args.subcommand == "exec":
-        exec_jail(args.name, args.cmd, additional_args)
+        sys.exit(exec_jail(args.name, args.cmd, additional_args))
 
     elif args.subcommand == "status":
-        status_jail(args.name)
+        sys.exit(status_jail(args.name))
 
     elif args.subcommand == "log":
-        log_jail(args.name)
+        sys.exit(log_jail(args.name))
 
     elif args.subcommand == "stop":
-        stop_jail(args.name)
+        sys.exit(stop_jail(args.name))
 
     elif args.subcommand == "edit":
-        edit_jail(args.name)
+        sys.exit(edit_jail(args.name))
 
     elif args.subcommand == "remove":
-        remove_jail(args.name)
+        sys.exit(remove_jail(args.name))
 
     elif args.subcommand == "list":
-        list_jails()
+        sys.exit(list_jails())
 
     elif args.subcommand == "images":
-        run_lxc_download_script()
+        sys.exit(run_lxc_download_script())
 
     elif args.subcommand == "startup":
-        startup_jails()
+        sys.exit(startup_jails())
 
     else:
         if agree("Create a new jail?", "y"):
             print()
-            create_jail("")
+            sys.exit(create_jail(""))
         else:
             parser.print_usage()
 

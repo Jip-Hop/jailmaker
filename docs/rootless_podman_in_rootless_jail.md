@@ -61,7 +61,7 @@ exit
 From the TrueNAS host, open a shell as the rootless user inside the jail.
 
 ```bash
-machinectl shell --uid 1000 rootless
+jlmkr shell --uid 1000 rootless
 ```
 
 Run rootless podman as user 1000.
