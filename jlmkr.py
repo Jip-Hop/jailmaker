@@ -457,6 +457,7 @@ def restart_jail(jail_name):
     """
     Restart jail with given name.
     """
+
     returncode = stop_jail_and_wait(jail_name)
     if returncode != 0:
         eprint("Abort restart.")
@@ -470,7 +471,7 @@ def cleanup(jail_path):
     Cleanup after aborted jail creation.
     """
     if os.path.isdir(jail_path):
-        eprint(f"Cleaning up: {jail_path}")
+        eprint(f"Cleaning up: {jail_path}.")
         shutil.rmtree(jail_path)
 
 
@@ -1107,6 +1108,9 @@ def stop_jail_and_wait(jail_name):
     Wait for jail with given name to stop.
     """
 
+    if not jail_is_running(jail_name):
+        return 0
+
     returncode = stop_jail(jail_name)
     if returncode != 0:
         eprint("Error while stopping jail.")
@@ -1136,15 +1140,14 @@ def remove_jail(jail_name):
     check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
 
     if check == jail_name:
+        print()
         jail_path = get_jail_path(jail_name)
-        if jail_is_running(jail_name):
-            print()
-            returncode = stop_jail_and_wait(jail_name)
-            if returncode != 0:
-                return returncode
+        returncode = stop_jail_and_wait(jail_name)
+        if returncode != 0:
+            return returncode
 
-        print(f"\nCleaning up: {jail_path}")
-        shutil.rmtree(jail_path)
+        print()
+        cleanup(jail_path)
         return 0
     else:
         eprint("Wrong name, nothing happened.")
