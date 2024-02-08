@@ -1010,17 +1010,25 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             "--inaccessible=/sys/module/apparmor",
         ]
 
-        config = cleandoc(
-            f"""
-            startup={startup}
-            docker_compatible={docker_compatible}
-            gpu_passthrough_intel={gpu_passthrough_intel}
-            gpu_passthrough_nvidia={gpu_passthrough_nvidia}
-            systemd_nspawn_user_args={systemd_nspawn_user_args}
-            # You generally will not need to change the options below
-            systemd_run_default_args={' '.join(systemd_run_default_args)}
-            systemd_nspawn_default_args={' '.join(systemd_nspawn_default_args)}
-        """
+        systemd_nspawn_user_args_multiline = "\n\t".join(
+            shlex.split(systemd_nspawn_user_args)
+        )
+        systemd_run_default_args_multiline = "\n\t".join(systemd_run_default_args)
+        systemd_nspawn_default_args_multiline = "\n\t".join(systemd_nspawn_default_args)
+
+        config = "\n".join(
+            [
+                f"startup={startup}",
+                f"docker_compatible={docker_compatible}",
+                f"gpu_passthrough_intel={gpu_passthrough_intel}",
+                f"gpu_passthrough_nvidia={gpu_passthrough_nvidia}",
+                f"systemd_nspawn_user_args={systemd_nspawn_user_args_multiline}",
+                "",
+                "# You generally will not need to change the options below",
+                f"systemd_run_default_args={systemd_run_default_args_multiline}",
+                "",
+                f"systemd_nspawn_default_args={systemd_nspawn_default_args_multiline}",
+            ]
         )
 
         print(config, file=open(jail_config_path, "w"))
@@ -1260,7 +1268,7 @@ def install_jailmaker():
         print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
 
     print("Done installing jailmaker.")
-    
+
     return 0
 
 
