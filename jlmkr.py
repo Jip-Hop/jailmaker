@@ -1041,6 +1041,9 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
                 f"systemd_run_default_args={systemd_run_default_args_multiline}",
                 "",
                 f"systemd_nspawn_default_args={systemd_nspawn_default_args_multiline}",
+                "",
+                "# The below is for reference only, currently not used",
+                f"initial_rootfs_image={distro} {release}",
             ]
         )
 
