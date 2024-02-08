@@ -107,6 +107,12 @@ jlmkr remove myjail
 jlmkr stop myjail
 ```
 
+### Restart Jail
+
+```shell
+jlmkr restart myjail
+```
+
 ### Jail Shell
 
 ```shell
