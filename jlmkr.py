@@ -453,6 +453,18 @@ def start_jail(jail_name, check_startup_enabled=False):
     return returncode
 
 
+def restart_jail(jail_name):
+    """
+    Restart jail with given name.
+    """
+    returncode = stop_jail_and_wait(jail_name)
+    if returncode != 0:
+        eprint("Abort restart.")
+        return returncode
+
+    return start_jail(jail_name)
+
+
 def cleanup(jail_path):
     """
     Cleanup after aborted jail creation.
@@ -1090,6 +1102,25 @@ def edit_jail(jail_name):
     return 0
 
 
+def stop_jail_and_wait(jail_name):
+    """
+    Wait for jail with given name to stop.
+    """
+
+    returncode = stop_jail(jail_name)
+    if returncode != 0:
+        eprint("Error while stopping jail.")
+        return returncode
+
+    print(f"Wait for {jail_name} to stop", end="", flush=True)
+    # Need to sleep since deleting immediately after stop causes problems...
+    while jail_is_running(jail_name):
+        time.sleep(1)
+        print(".", end="", flush=True)
+
+    return 0
+
+
 def remove_jail(jail_name):
     """
     Remove jail with given name.
@@ -1107,12 +1138,10 @@ def remove_jail(jail_name):
     if check == jail_name:
         jail_path = get_jail_path(jail_name)
         if jail_is_running(jail_name):
-            print(f"\nWait for {jail_name} to stop...", end="")
-            stop_jail(jail_name)
-            # Need to sleep since deleting immediately after stop causes problems...
-            while jail_is_running(jail_name):
-                time.sleep(1)
-                print(".", end="", flush=True)
+            print()
+            returncode = stop_jail_and_wait(jail_name)
+            if returncode != 0:
+                return returncode
 
         print(f"\nCleaning up: {jail_path}")
         shutil.rmtree(jail_path)
@@ -1314,6 +1343,10 @@ def main():
     ).add_argument("name", help="name of the jail")
 
     subparsers.add_parser(
+        name="restart", epilog=DISCLAIMER, help="restart a running jail"
+    ).add_argument("name", help="name of the jail")
+
+    subparsers.add_parser(
         name="shell",
         epilog=DISCLAIMER,
         help="open shell in running jail (alias for machinectl shell)",
@@ -1381,6 +1414,9 @@ def main():
 
     elif args.subcommand == "start":
         sys.exit(start_jail(args.name))
+
+    elif args.subcommand == "restart":
+        sys.exit(restart_jail(args.name))
 
     elif args.subcommand == "shell":
         sys.exit(shell_jail(additional_args))
