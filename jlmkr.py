@@ -286,6 +286,26 @@ def parse_config(jail_config_path):
     return config
 
 
+def add_hook(jail_path, systemd_run_additional_args, hook_command, hook_type):
+    if not hook_command:
+        return
+
+    # Run the command directly if it doesn't start with a shebang
+    if not hook_command.startswith("#!"):
+        systemd_run_additional_args += [f"--property={hook_type}={hook_command}"]
+        return
+
+    # Otherwise write a script file and call that
+    hook_file = os.path.abspath(os.path.join(jail_path, f".{hook_type}"))
+
+    # Only write if contents are different
+    if not os.path.exists(hook_file) or Path(hook_file).read_text() != hook_command:
+        print(hook_command, file=open(hook_file, "w"))
+
+    stat_chmod(hook_file, 0o700)
+    systemd_run_additional_args += [f"--property={hook_type}={hook_file}"]
+
+
 def start_jail(jail_name, check_startup_enabled=False):
     """
     Start jail with given name.
@@ -400,6 +420,21 @@ def start_jail(jail_name, check_startup_enabled=False):
         systemd_nspawn_additional_args += [
             "--capability=all",
         ]
+
+    # Add hooks to execute commands on the host before starting and after stopping a jail
+    add_hook(
+        jail_path,
+        systemd_run_additional_args,
+        config.get("pre_start_hook"),
+        "ExecStartPre",
+    )
+
+    add_hook(
+        jail_path,
+        systemd_run_additional_args,
+        config.get("post_stop_hook"),
+        "ExecStopPost",
+    )
 
     # Legacy gpu_passthrough config setting
     if config.get("gpu_passthrough") == "1":
@@ -1029,13 +1064,31 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
         systemd_run_default_args_multiline = "\n\t".join(systemd_run_default_args)
         systemd_nspawn_default_args_multiline = "\n\t".join(systemd_nspawn_default_args)
 
-        config = "\n".join(
+        config = cleandoc(
+            f"""
+            startup={startup}
+            docker_compatible={docker_compatible}
+            gpu_passthrough_intel={gpu_passthrough_intel}
+            gpu_passthrough_nvidia={gpu_passthrough_nvidia}   
+        """
+        )
+
+        config += f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
+
+        config += cleandoc(
+            """
+            # Specify command/script to run on the HOST before starting the jail
+            pre_start_hook=echo 'PRE_START_HOOK'
+            
+            # Specify a command/script to run on the HOST after stopping the jail
+            post_stop_hook=#!/usr/bin/bash
+                echo 'POST STOP HOOK'
+        """
+        )
+
+        config += "\n".join(
             [
-                f"startup={startup}",
-                f"docker_compatible={docker_compatible}",
-                f"gpu_passthrough_intel={gpu_passthrough_intel}",
-                f"gpu_passthrough_nvidia={gpu_passthrough_nvidia}",
-                f"systemd_nspawn_user_args={systemd_nspawn_user_args_multiline}",
+                "",
                 "",
                 "# You generally will not need to change the options below",
                 f"systemd_run_default_args={systemd_run_default_args_multiline}",
