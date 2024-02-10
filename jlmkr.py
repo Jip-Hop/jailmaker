@@ -307,7 +307,7 @@ def add_hook(jail_path, systemd_run_additional_args, hook_command, hook_type):
     systemd_run_additional_args += [f"--property={hook_type}={hook_file}"]
 
 
-def start_jail(jail_name, check_startup_enabled=False):
+def start_jail(jail_name):
     """
     Start jail with given name.
     """
@@ -315,9 +315,9 @@ def start_jail(jail_name, check_startup_enabled=False):
         f"Skipped starting jail {jail_name}. It appears to be running already..."
     )
 
-    if not check_startup_enabled and jail_is_running(jail_name):
+    if jail_is_running(jail_name):
         eprint(skip_start_message)
-        return 1
+        return 0
 
     jail_path = get_jail_path(jail_name)
     jail_config_path = get_jail_config_path(jail_name)
@@ -327,18 +327,6 @@ def start_jail(jail_name, check_startup_enabled=False):
     if not config:
         eprint("Aborting...")
         return 1
-
-    # Only start if the startup setting is enabled in the config
-    if check_startup_enabled:
-        if config.get("startup") == "1":
-            # We should start this jail based on the startup config...
-            if jail_is_running(jail_name):
-                # ...but we can skip if it's already running
-                eprint(skip_start_message)
-                return 0
-        else:
-            # Skip starting this jail since the startup config setting is not enabled
-            return 0
 
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
@@ -1443,12 +1431,17 @@ def startup_jails():
     if returncode != 0:
         eprint("Failed to install jailmaker. Abort startup.")
         return returncode
-
+    
+    start_failure = False
     for jail_name in get_all_jail_names():
-        returncode = start_jail(jail_name, True)
-        eprint(f"Failed to start jail {jail_name}. Abort startup.")
-        return returncode
-
+        config = parse_config(get_jail_config_path(jail_name))
+        if config and config.get("startup") == "1":
+            if start_jail(jail_name) != 0:
+                start_failure = True
+    
+    if start_failure:
+        return 1
+    
     return 0
 
 
