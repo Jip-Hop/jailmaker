@@ -31,7 +31,7 @@ chmod +x jlmkr.py
 ./jlmkr.py install
 ```
 
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. Additionally a symlink has been created (if the boot pool is not readonly) so you can call `jlmkr` from anywhere.
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. A symlink has been created so you can call `jlmkr` from anywhere (unless the boot pool is readonly, which is the default since SCALE 24.04). Additionally shell aliases have been setup, so you can still call `jlmkr` in an interactive shell (even if the symlink couldn't be created).
 
 After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases will remain). To restore the symlink, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
 
