@@ -4,6 +4,7 @@ import argparse
 import configparser
 import contextlib
 import ctypes
+import errno
 import glob
 import hashlib
 import json
@@ -1073,7 +1074,9 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
         """
         )
 
-        config += f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
+        config += (
+            f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
+        )
 
         config += cleandoc(
             """
@@ -1314,6 +1317,58 @@ def list_jails():
     return 0
 
 
+def replace_or_add_string(file_path, regex, replacement_string):
+    """
+    Replace all occurrences of a regular expression in a file with a given string.
+    Add the string to the end of the file if regex doesn't match.
+
+    Args:
+        file_path (str): The path to the file.
+        regex (str): The regular expression to search for.
+        replacement_string (str): The string to replace the matches with.
+    """
+
+    with open(file_path, "a+") as f:
+        f.seek(0)
+
+        updated = False
+        found = False
+        new_text = ""
+        replacement_line = f"{replacement_string}\n"
+
+        for line in f:
+            if not re.match(regex, line):
+                new_text += line
+                continue
+
+            found = True
+            new_text += replacement_line
+
+            if replacement_line != line:
+                updated = True
+
+        if not new_text.strip():
+            # In case of an empty file just write the replacement_string
+            new_text = replacement_line
+            updated = True
+        elif not found:
+            # Add a newline to the end of the file in case it's not there
+            if not new_text.endswith("\n"):
+                new_text += "\n"
+            # Then add our replacement_string to the end of the file
+            new_text += replacement_line
+            updated = True
+
+        # Only overwrite in case there are change to the file
+        if updated:
+            f.seek(0)
+            f.truncate()
+            f.write(new_text)
+            return True
+
+    return False
+
+
 def install_jailmaker():
     # Check if command exists in path
     if shutil.which("systemd-nspawn"):
@@ -1341,19 +1396,41 @@ def install_jailmaker():
         for file, original_permission in original_permissions.items():
             stat_chmod(file, original_permission)
 
-    target = f"/usr/local/sbin/{SYMLINK_NAME}"
+    symlink = f"/usr/local/sbin/{SYMLINK_NAME}"
 
-    # Check if command exists in path
-    if shutil.which(SYMLINK_NAME):
-        print(f"The {SYMLINK_NAME} command is available.")
-    elif not os.path.lexists(target):
-        print(f"Creating symlink {target} to {SCRIPT_PATH}.")
-        os.symlink(SCRIPT_PATH, target)
-    else:
+    if os.path.lexists(symlink) and not os.path.islink(symlink):
         print(
-            f"File {target} already exists... Maybe it's a broken symlink from a previous install attempt?"
+            f"Unable to create symlink at {symlink}. File already exists but is not a symlink."
         )
-        print(f"Skipped creating new symlink {target} to {SCRIPT_PATH}.")
+    # Check if the symlink is already pointing to the desired destination
+    elif os.path.realpath(symlink) != SCRIPT_PATH:
+        try:
+            Path(symlink).unlink(missing_ok=True)
+            os.symlink(SCRIPT_PATH, symlink)
+            print(f"Created symlink {symlink} to {SCRIPT_PATH}.")
+        except OSError as e:
+            if e.errno != errno.EROFS:
+                raise e
+
+            print(
+                f"Cannot create symlink because {symlink} is on a readonly filesystem."
+            )
+
+    alias = f"alias jlmkr={shlex.quote(SCRIPT_PATH)} # managed by jailmaker"
+    alias_regex = re.compile(r"^\s*alias jlmkr=.*# managed by jailmaker\s*")
+    shell_env = os.getenv("SHELL")
+
+    for shell_type in ["bash", "zsh"]:
+        file = "/root/.bashrc" if shell_type == "bash" else "/root/.zshrc"
+
+        if replace_or_add_string(file, alias_regex, alias):
+            print(f"Created {shell_type} alias {SYMLINK_NAME}.")
+            if shell_env.endswith(shell_type):
+                print(
+                    f"Please source {file} manually for the {SYMLINK_NAME} alias to become effective immediately."
+                )
+        else:
+            print(f"The {shell_type} alias {SYMLINK_NAME} is already present.")
 
     print("Done installing jailmaker.")
 

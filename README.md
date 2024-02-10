@@ -10,7 +10,6 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This script helps with the following:
 
-- Installing the systemd-container package (which includes systemd-nspawn)
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Optional: configuring the jail so you can run Docker inside it
@@ -23,7 +22,7 @@ Despite what the word 'jail' implies, jailmaker's intended use case is to create
 
 ## Installation
 
-Create a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
+[Installation steps with screenshots](https://www.truenas.com/docs/scale/scaletutorials/apps/sandboxes/) are provided on the TrueNAS website. Start by creating a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
 
 ```shell
 cd /mnt/mypool/jailmaker
@@ -32,9 +31,9 @@ chmod +x jlmkr.py
 ./jlmkr.py install
 ```
 
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. Additionally a symlink has been created so you can call `jlmkr` from anywhere.
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. Additionally a symlink has been created (if the boot pool is not readonly) so you can call `jlmkr` from anywhere.
 
-After an update of TrueNAS SCALE the symlink will be lost and `systemd-nspawn` (the core package which makes `jailmaker` work) may be gone too. Not to worry, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
+After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases will remain). To restore the symlink, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
 
 ## Usage
 
@@ -51,15 +50,12 @@ After answering a few questions you should have your first jail up and running!
 ### Startup Jails on Boot
 
 ```shell
-# Best to call startup directly (not through the jlmkr symlink)
+# Call startup using the absolute path to jlmkr.py
+# The jlmkr shell alias doesn't work in Init/Shutdown Scripts
 /mnt/mypool/jailmaker/jlmkr.py startup
-
-# Can be called from the symlink too...
-# But this may not be available after a TrueNAS SCALE update
-jlmkr startup
 ```
 
-In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This will automatically fix the installation of `systemd-nspawn` and setup the `jlmkr` symlink, as well as start all the jails with `startup=1` in the config file. Running the `startup` command Post Init is recommended to keep `jailmaker` working after a TrueNAS SCALE update.
+In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This creates the `jlmkr` symlink (if possible), as well as start all the jails with `startup=1` in the config file.
 
 ### Start Jail
 
