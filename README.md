@@ -45,7 +45,13 @@ Creating a jail is interactive. You'll be presented with questions which guide y
 jlmkr create myjail
 ```
 
-After answering a few questions you should have your first jail up and running!
+After answering some questions you should have your first jail up and running!
+
+You may also specify a path to a config template, for a quick and consistent jail creation process.
+
+```shell
+jlmkr create myjail /path/to/config/template
+```
 
 ### Startup Jails on Boot
 

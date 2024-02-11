@@ -17,6 +17,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from collections import defaultdict
@@ -273,18 +274,20 @@ def stop_jail(jail_name):
     return subprocess.run(["machinectl", "poweroff", jail_name]).returncode
 
 
-def parse_config(jail_config_path):
+def parse_config_string(config_string):
     config = configparser.ConfigParser()
+    # Workaround to read config file without section headers
+    config.read_string("[DEFAULT]\n" + config_string)
+    config = dict(config["DEFAULT"])
+    return config
+
+
+def parse_config_file(jail_config_path):
     try:
-        # Workaround to read config file without section headers
-        config.read_string("[DEFAULT]\n" + Path(jail_config_path).read_text())
+        return parse_config_string(Path(jail_config_path).read_text())
     except FileNotFoundError:
         eprint(f"Unable to find config file: {jail_config_path}.")
         return
-
-    config = dict(config["DEFAULT"])
-
-    return config
 
 
 def add_hook(jail_path, systemd_run_additional_args, hook_command, hook_type):
@@ -321,12 +324,52 @@ def start_jail(jail_name):
 
     jail_path = get_jail_path(jail_name)
     jail_config_path = get_jail_config_path(jail_name)
+    jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
-    config = parse_config(jail_config_path)
+    config = parse_config_file(jail_config_path)
 
     if not config:
         eprint("Aborting...")
         return 1
+
+    # Handle initial setup
+    initial_setup = config.get("initial_setup")
+    
+    # Alternative method to setup on first boot:
+    # https://www.undrground.org/2021/01/25/adding-a-single-run-task-via-systemd/
+    # If there's no machine-id, then this the first time the jail is started
+    if initial_setup and not os.path.exists(
+        os.path.join(jail_rootfs_path, "etc/machine-id")
+    ):
+        # Run the command directly if it doesn't start with a shebang
+        if initial_setup.startswith("#!"):
+            # Write a script file and call that
+            initial_setup_file = os.path.abspath(
+                os.path.join(jail_path, ".initial_setup")
+            )
+            print(initial_setup, file=open(initial_setup_file, "w"))
+            stat_chmod(initial_setup_file, 0o700)
+            cmd = [
+                "systemd-nspawn",
+                "-q",
+                "-D",
+                jail_rootfs_path,
+                f"--bind-ro={initial_setup_file}:/root/initial_startup",
+                "/root/initial_startup",
+            ]
+        else:
+            cmd = ["systemd-nspawn", "-q", "-D", jail_rootfs_path, initial_setup]
+
+        returncode = subprocess.run(cmd).returncode
+        if returncode != 0:
+            eprint("Failed to run initial setup:")
+            eprint(initial_setup)
+            eprint()
+            eprint("Abort starting jail.")
+            return returncode
+        
+        # Cleanup the initial_setup_file
+        Path(initial_setup_file).unlink(missing_ok=True)
 
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
@@ -665,10 +708,21 @@ def check_jail_name_available(jail_name, warn=True):
     return False
 
 
-def create_jail(jail_name, distro="debian", release="bookworm"):
+def ask_jail_name(jail_name=""):
+    while True:
+        print()
+        jail_name = input_with_default("Enter jail name: ", jail_name).strip()
+        if check_jail_name_valid(jail_name):
+            if check_jail_name_available(jail_name):
+                return jail_name
+
+
+def create_jail(jail_name="", config_path=None, distro="debian", release="bookworm"):
     """
     Create jail with given name.
     """
+
+    config_string = ""
 
     print(DISCLAIMER)
 
@@ -705,58 +759,92 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
     stat_chmod(JAILS_DIR_PATH, 0o700)
 
-    print()
-    if not agree(f"Install the recommended image ({distro} {release})?", "y"):
-        print(
-            dedent(
-                f"""
-            {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
+    #################
+    # Config handling
+    #################
 
-            You may now choose from a list which distro to install.
-            But not all of them may work with {COMMAND_NAME} since these images are made for LXC.
-            Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
-        """
-            )
-        )
-        input("Press Enter to continue...")
+    if config_path:
+        try:
+            config_string = Path(config_path).read_text()
+        except FileNotFoundError:
+            eprint(f"Unable to find file: {config_path}.")
+            return 1
+    else:
         print()
+        if agree("Do you wish to create a jail from a config template?", "n"):
+            print(
+                dedent(
+                    """
+                A text editor will open so you can provide the config template.
 
-        returncode = run_lxc_download_script()
-        if returncode != 0:
-            return returncode
-
-        print(
-            dedent(
-                """
-            Choose from the DIST column.
-        """
+                - please copy your config
+                - paste it into the text editor      
+                - save and close the text editor
+            """
+                )
             )
-        )
+            input("Press Enter to open the text editor.")
 
-        distro = input("Distro: ")
+            with tempfile.NamedTemporaryFile() as f:
+                subprocess.call([TEXT_EDITOR, f.name])
+                f.seek(0)
+                config_string = f.read().decode()
 
-        print(
-            dedent(
-                """
-            Choose from the RELEASE column (or ARCH if RELEASE is empty).
-        """
-            )
-        )
-
-        release = input("Release: ")
-
-    while True:
+    if config_string:
+        config = parse_config_string(config_string)
+        # Ask for jail name if not provided
+        if not (
+            jail_name
+            and check_jail_name_valid(jail_name)
+            and check_jail_name_available(jail_name)
+        ):
+            jail_name = ask_jail_name(jail_name)
+        jail_path = get_jail_path(jail_name)
+        distro, release = config.get("initial_rootfs_image").split()
+    else:
         print()
-        jail_name = input_with_default("Enter jail name: ", jail_name).strip()
-        if check_jail_name_valid(jail_name):
-            if check_jail_name_available(jail_name):
-                break
+        if not agree(f"Install the recommended image ({distro} {release})?", "y"):
+            print(
+                dedent(
+                    f"""
+                {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
 
-    jail_path = get_jail_path(jail_name)
+                You may now choose from a list which distro to install.
+                But not all of them may work with {COMMAND_NAME} since these images are made for LXC.
+                Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
+            """
+                )
+            )
+            input("Press Enter to continue...")
+            print()
 
-    # Cleanup in except, but only once the jail_path is final
-    # Otherwise we may cleanup the wrong directory
-    try:
+            returncode = run_lxc_download_script()
+            if returncode != 0:
+                return returncode
+
+            print(
+                dedent(
+                    """
+                Choose from the DIST column.
+            """
+                )
+            )
+
+            distro = input("Distro: ")
+
+            print(
+                dedent(
+                    """
+                Choose from the RELEASE column (or ARCH if RELEASE is empty).
+            """
+                )
+            )
+
+            release = input("Release: ")
+
+        jail_name = ask_jail_name(jail_name)
+        jail_path = get_jail_path(jail_name)
+
         print(
             dedent(
                 f"""
@@ -875,8 +963,106 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
             )
         )
 
+        # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
+        # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
+        # Use TasksMax=infinity since this is what docker does:
+        # https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
+
+        # Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
+        # Would give "directory tree currently busy" error and I'd have to run
+        # `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
+        # Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
+        # with the same name anyway: as long as we're starting jails using this script,
+        # it won't be possible to start the same jail twice
+
+        systemd_run_default_args = [
+            "--property=KillMode=mixed",
+            "--property=Type=notify",
+            "--property=RestartForceExitStatus=133",
+            "--property=SuccessExitStatus=133",
+            "--property=Delegate=yes",
+            "--property=TasksMax=infinity",
+            "--collect",
+            "--setenv=SYSTEMD_NSPAWN_LOCK=0",
+        ]
+
+        # Always add --bind-ro=/sys/module to make lsmod happy
+        # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
+        systemd_nspawn_default_args = [
+            "--keep-unit",
+            "--quiet",
+            "--boot",
+            "--bind-ro=/sys/module",
+            "--inaccessible=/sys/module/apparmor",
+        ]
+
+        systemd_nspawn_user_args_multiline = "\n\t".join(
+            shlex.split(systemd_nspawn_user_args)
+        )
+        systemd_run_default_args_multiline = "\n\t".join(systemd_run_default_args)
+        systemd_nspawn_default_args_multiline = "\n\t".join(systemd_nspawn_default_args)
+
+        config_string = cleandoc(
+            f"""
+            startup={startup}
+            docker_compatible={docker_compatible}
+            gpu_passthrough_intel={gpu_passthrough_intel}
+            gpu_passthrough_nvidia={gpu_passthrough_nvidia}   
+        """
+        )
+
+        config_string += (
+            f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
+        )
+
+        config_string += cleandoc(
+            """
+            # # Specify command/script to run on the HOST before starting the jail
+            # # For example to load kernel modules and config kernel settings
+            # pre_start_hook=#!/usr/bin/bash
+            #     echo 'PRE_START_HOOK'
+            #     echo 1 > /proc/sys/net/ipv4/ip_forward
+            #     modprobe br_netfilter
+            #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
+            #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
+            # 
+            # # Specify a command/script to run on the HOST after stopping the jail
+            # post_stop_hook=echo 'POST_STOP_HOOK'
+            
+            # Specify command/script to run IN THE JAIL before starting it for the first time
+            # Useful to install packages on top of the base rootfs
+            # NOTE: this script will run in the host networking namespace and ignores
+            # all systemd_nspawn_user_args such as bind mounts
+            initial_setup=#!/usr/bin/bash
+                set -euo pipefail
+                apt-get update && apt-get -y install curl
+                curl -fsSL https://get.docker.com | sh
+        """
+        )
+
+        config_string += "\n".join(
+            [
+                "",
+                "",
+                "# You generally will not need to change the options below",
+                f"systemd_run_default_args={systemd_run_default_args_multiline}",
+                "",
+                f"systemd_nspawn_default_args={systemd_nspawn_default_args_multiline}",
+                "",
+                "# Used by jlmkr create",
+                f"initial_rootfs_image={distro} {release}",
+            ]
+        )
+
         print()
 
+    ##############
+    # Create start
+    ##############
+
+    # Cleanup in except, but only once the jail_path is final
+    # Otherwise we may cleanup the wrong directory
+    try:
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
@@ -1014,84 +1200,7 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
                 file=open(os.path.join(preset_path, "00-jailmaker.preset"), "w"),
             )
 
-        # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
-        # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
-        # Use TasksMax=infinity since this is what docker does:
-        # https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
-
-        # Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
-        # Would give "directory tree currently busy" error and I'd have to run
-        # `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
-        # Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
-        # with the same name anyway: as long as we're starting jails using this script,
-        # it won't be possible to start the same jail twice
-
-        systemd_run_default_args = [
-            "--property=KillMode=mixed",
-            "--property=Type=notify",
-            "--property=RestartForceExitStatus=133",
-            "--property=SuccessExitStatus=133",
-            "--property=Delegate=yes",
-            "--property=TasksMax=infinity",
-            "--collect",
-            "--setenv=SYSTEMD_NSPAWN_LOCK=0",
-        ]
-
-        # Always add --bind-ro=/sys/module to make lsmod happy
-        # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
-        systemd_nspawn_default_args = [
-            "--keep-unit",
-            "--quiet",
-            "--boot",
-            "--bind-ro=/sys/module",
-            "--inaccessible=/sys/module/apparmor",
-        ]
-
-        systemd_nspawn_user_args_multiline = "\n\t".join(
-            shlex.split(systemd_nspawn_user_args)
-        )
-        systemd_run_default_args_multiline = "\n\t".join(systemd_run_default_args)
-        systemd_nspawn_default_args_multiline = "\n\t".join(systemd_nspawn_default_args)
-
-        config = cleandoc(
-            f"""
-            startup={startup}
-            docker_compatible={docker_compatible}
-            gpu_passthrough_intel={gpu_passthrough_intel}
-            gpu_passthrough_nvidia={gpu_passthrough_nvidia}   
-        """
-        )
-
-        config += (
-            f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
-        )
-
-        config += cleandoc(
-            """
-            # Specify command/script to run on the HOST before starting the jail
-            pre_start_hook=echo 'PRE_START_HOOK'
-            
-            # Specify a command/script to run on the HOST after stopping the jail
-            post_stop_hook=#!/usr/bin/bash
-                echo 'POST STOP HOOK'
-        """
-        )
-
-        config += "\n".join(
-            [
-                "",
-                "",
-                "# You generally will not need to change the options below",
-                f"systemd_run_default_args={systemd_run_default_args_multiline}",
-                "",
-                f"systemd_nspawn_default_args={systemd_nspawn_default_args_multiline}",
-                "",
-                "# The below is for reference only, currently not used",
-                f"initial_rootfs_image={distro} {release}",
-            ]
-        )
-
-        print(config, file=open(jail_config_path, "w"))
+        print(config_string, file=open(jail_config_path, "w"))
 
         os.chmod(jail_config_path, 0o600)
 
@@ -1100,6 +1209,13 @@ def create_jail(jail_name, distro="debian", release="bookworm"):
         cleanup(jail_path)
         raise error
 
+    # In case you want to create a jail without any user interaction,
+    # you need to skip this final question
+    # echo 'y' | jlmkr create test testconfig
+    # TODO: make jlmkr create work cleanly without user interaction.
+    # Current echo 'y' workaround may cause problems when the jail name already exists
+    # You'd end up with a new jail called 'y'
+    # and the script will crash at the agree statement below
     print()
     if agree(f"Do you want to start jail {jail_name} right now?", "y"):
         return start_jail(jail_name)
@@ -1286,7 +1402,7 @@ def list_jails():
     # TODO: add additional properties from the jails config file
 
     for jail_name in jails:
-        config = parse_config(get_jail_config_path(jail_name))
+        config = parse_config_file(get_jail_config_path(jail_name))
 
         startup = False
         if config:
@@ -1431,17 +1547,17 @@ def startup_jails():
     if returncode != 0:
         eprint("Failed to install jailmaker. Abort startup.")
         return returncode
-    
+
     start_failure = False
     for jail_name in get_all_jail_names():
-        config = parse_config(get_jail_config_path(jail_name))
+        config = parse_config_file(get_jail_config_path(jail_name))
         if config and config.get("startup") == "1":
             if start_jail(jail_name) != 0:
                 start_failure = True
-    
+
     if start_failure:
         return 1
-    
+
     return 0
 
 
@@ -1463,9 +1579,11 @@ def main():
         help="install jailmaker dependencies and create symlink",
     )
 
-    subparsers.add_parser(
+    create_parser = subparsers.add_parser(
         name="create", epilog=DISCLAIMER, help="create a new jail"
-    ).add_argument("name", nargs="?", help="name of the jail")
+    )
+    create_parser.add_argument("name", nargs="?", help="name of the jail")
+    create_parser.add_argument("config", nargs="?", help="path to config file template")
 
     subparsers.add_parser(
         name="start", epilog=DISCLAIMER, help="start a previously created jail"
@@ -1539,7 +1657,7 @@ def main():
         sys.exit(install_jailmaker())
 
     elif args.subcommand == "create":
-        sys.exit(create_jail(args.name))
+        sys.exit(create_jail(args.name, args.config))
 
     elif args.subcommand == "start":
         sys.exit(start_jail(args.name))
@@ -1580,7 +1698,7 @@ def main():
     else:
         if agree("Create a new jail?", "y"):
             print()
-            sys.exit(create_jail(""))
+            sys.exit(create_jail())
         else:
             parser.print_usage()
 
