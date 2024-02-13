@@ -1,37 +1,14 @@
-# Incus / LXD / LXC / KVM inside jail
+# Debian Incus Jail Template (LXD / LXC / KVM)
+
+Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create myincusjail /mnt/tank/path/to/incus/config`. Then check out [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
 
 ## Disclaimer
 
 **These notes are a work in progress. Using Incus in this setup hasn't been extensively tested.**
 
-## Prerequisites
-
-- TrueNAS SCALE 23.10 installed bare metal (not inside VM)
-- Jailmaker installed
-- Setup bridge networking (see Advanced Networking in the readme)
-
-## Installation
-
-Create a debian 12 jail and [install incus](https://github.com/zabbly/incus#installation). Also install the `incus-ui-canonical` package to install the web interface. Ensure the config file looks like the below:
-
-Run `modprobe vhost_vsock` on the TrueNAS host.
-
-```
-startup=0
-docker_compatible=1
-gpu_passthrough_intel=1
-gpu_passthrough_nvidia=0
-systemd_nspawn_user_args=--network-bridge=br1 --resolv-conf=bind-host --bind=/dev/fuse --bind=/dev/kvm --bind=/dev/vsock --bind=/dev/vhost-vsock
-# You generally will not need to change the options below
-systemd_run_default_args=--property=KillMode=mixed --property=Type=notify --property=RestartForceExitStatus=133 --property=SuccessExitStatus=133 --property=Delegate=yes --property=TasksMax=infinity --collect --setenv=SYSTEMD_NSPAWN_LOCK=0
-systemd_nspawn_default_args=--keep-unit --quiet --boot --bind-ro=/sys/module --inaccessible=/sys/module/apparmor
-```
-
-Check out [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
-
 ## Create Ubuntu Desktop VM
 
-Incus web GUI should be running on port 8443. Create new instance, call it `dekstop`, and choose the `Ubuntu	jammy desktop virtual-machine ubuntu/22.04/desktop` image.
+Incus web GUI should be running on port 8443. Create new instance, call it `desktop`, and choose the `Ubuntu	jammy desktop virtual-machine ubuntu/22.04/desktop` image.
 
 ## Bind mount / virtiofs
 
@@ -75,41 +52,7 @@ root@incus:/home/test# dd if=/dev/random of=./test2.img bs=1G count=1 oflag=dsyn
 
 ## Create Ubuntu container
 
-To be able to create unprivileged (rootless) containers with incus inside the jail, you need to increase the amount of UIDs available inside the jail. Please refer to the [Podman instructions](rootless_podman_in_rootless_jail.md) for more information. If you don't increase the UIDs you can only create privileged containers. You'd have to change `Privileged` to `Allow` in `Security policies` in this case.
-
-## Canonical LXD install via snap
-
-Installing the lxd snap is an alternative to Incus. But out of the box running `snap install lxd` will cause AppArmor issues when running inside a jailmaker jail on SCALE.
-
-### Workaround 1: Disable AppArmor kernel module
-
-[To my knowledge AppArmor is not uses on SCALE](https://github.com/truenas/charts/pull/428#issuecomment-1113936420). The AppArmor related packages aren't even installed.
-
-Ensure to add --bind=/dev/fuse and ensure using bridge or macvlan networking:
-
-```
-# On the host
-cat /sys/module/apparmor/parameters/enabled
-Y
-midclt call system.advanced.update '{"kernel_extra_options": "apparmor=0"}'
-reboot
-cat /sys/module/apparmor/parameters/enabled
-
-# In Ubuntu jail
-apt update
-ln -s /bin/true /usr/local/bin/udevadm
-apt install -y --no-install-recommends snapd
-snap install lxd
-lxd init
-snap set lxd ui.enable=true
-systemctl reload snap.lxd.daemon
-
-# Check out: https://example:8443
-```
-
-### Workaround 2: inaccessible /sys/module/apparmor
-
-If I don't want to mess with kernel parameters, I can trick the jail into thinking the apparmor module is not loaded by mounting over /sys/module/apparmor: `mount -v -r -t tmpfs -o size=50m test /sys/module/apparmor`. Then `snap install lxd` completes! Best way to do this is to add `--inaccessible=/sys/module/apparmor` to the systemd_nspawn_user_args.
+To be able to create unprivileged (rootless) containers with incus inside the jail, you need to increase the amount of UIDs available inside the jail. Please refer to the [Podman instructions](../podman/README.md) for more information. If you don't increase the UIDs you can only create privileged containers. You'd have to change `Privileged` to `Allow` in `Security policies` in this case.
 
 ## References
 
