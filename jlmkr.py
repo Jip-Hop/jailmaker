@@ -855,6 +855,11 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             )
         )
 
+        # TODO: ask to setup hooks and initial_setup
+        # Open text editor with current config file
+        # Or don't ask and make this a template-only feature,
+        # make it possible to override values in the template during jlmkr create with cli args
+
         docker_compatible = 0
 
         if agree("Make jail docker compatible right now?", "n"):
@@ -1029,14 +1034,14 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             # # Specify a command/script to run on the HOST after stopping the jail
             # post_stop_hook=echo 'POST_STOP_HOOK'
             
-            # Specify command/script to run IN THE JAIL before starting it for the first time
-            # Useful to install packages on top of the base rootfs
-            # NOTE: this script will run in the host networking namespace and ignores
-            # all systemd_nspawn_user_args such as bind mounts
-            initial_setup=#!/usr/bin/bash
-                set -euo pipefail
-                apt-get update && apt-get -y install curl
-                curl -fsSL https://get.docker.com | sh
+            # # Specify command/script to run IN THE JAIL before starting it for the first time
+            # # Useful to install packages on top of the base rootfs
+            # # NOTE: this script will run in the host networking namespace and ignores
+            # # all systemd_nspawn_user_args such as bind mounts
+            # initial_setup=#!/usr/bin/bash
+            #     set -euo pipefail
+            #     apt-get update && apt-get -y install curl
+            #     curl -fsSL https://get.docker.com | sh
         """
         )
 
