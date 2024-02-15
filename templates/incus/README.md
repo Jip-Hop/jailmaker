@@ -1,10 +1,33 @@
 # Debian Incus Jail Template (LXD / LXC / KVM)
 
-Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create myincusjail /mnt/tank/path/to/incus/config`. Then check out [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
-
 ## Disclaimer
 
-**These notes are a work in progress. Using Incus in this setup hasn't been extensively tested.**
+**Experimental. Using Incus in this setup hasn't been extensively tested and has [known issues](#known-issues).**
+
+## Setup
+
+Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create myincusjail /mnt/tank/path/to/incus/config`.
+
+Unfortunately incus doesn't want to install from the `initial_setup` script inside the config file. So we manually finish the setup by running the following after creating and starting the jail:
+
+```bash
+jlmkr exec myincusjail bash -c 'apt-get -y install incus incus-ui-canonical &&
+    incus admin init'
+```    
+
+Follow [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
+
+Then visit the Incus GUI inside the browser https://0.0.0.0:8443. To find out which IP address to use instead of 0.0.0.0, check the IP address for your jail with `jlmkr list`.
+
+## Known Issues
+
+Using Incus in the jail will cause the following error when starting a VM from the TrueNAS SCALE web GUI:
+
+```
+[EFAULT] internal error: process exited while connecting to monitor: Could not access KVM kernel module: Permission denied 2024-02-16T14:40:14.886658Z qemu-system-x86_64: -accel kvm: failed to initialize kvm: Permission denied
+```
+
+A reboot will resolve the issue (until you start the Incus jail again).
 
 ## Create Ubuntu Desktop VM
 

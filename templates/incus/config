@@ -8,6 +8,7 @@ gpu_passthrough_nvidia=0
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # TODO: don't use --capability=all but specify only the required capabilities
+# TODO: or add and use privileged flag?
 systemd_nspawn_user_args=--network-macvlan=eno1
     --resolv-conf=bind-host
     --capability=all
@@ -31,6 +32,8 @@ pre_start_hook=#!/usr/bin/bash
 # NOTE: this script will run in the host networking namespace and ignores
 # all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
+    set -euo pipefail
+    apt-get update && apt-get -y install curl
     mkdir -p /etc/apt/keyrings/
     curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
     sh -c 'cat <<EOF > /etc/apt/sources.list.d/zabbly-incus-stable.sources
@@ -44,7 +47,6 @@ initial_setup=#!/usr/bin/bash
 
     EOF'
     apt-get update
-    apt-get -y install incus incus-ui-canonical
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
@@ -55,10 +57,8 @@ systemd_run_default_args=--property=KillMode=mixed
 	--property=TasksMax=infinity
 	--collect
 	--setenv=SYSTEMD_NSPAWN_LOCK=0
-# TODO: check if the below 2 are required
-# --setenv=SYSTEMD_SECCOMP=0
+# TODO: add below if required:
 # --property=DevicePolicy=auto
-# TODO: add and use privileged flag?
 
 systemd_nspawn_default_args=--keep-unit
 	--quiet

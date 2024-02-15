@@ -8,7 +8,8 @@ gpu_passthrough_nvidia=0
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # TODO: don't use --capability=all but specify only the required capabilities
-systemd_nspawn_user_args=--network-macvlan=eno1
+# TODO: or add and use privileged flag?
+systemd_nspawn_user_args=--network-bridge=br1
     --resolv-conf=bind-host
     --capability=all
     --bind=/dev/fuse
@@ -29,8 +30,9 @@ pre_start_hook=#!/usr/bin/bash
 # NOTE: this script will run in the host networking namespace and ignores
 # all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
+    set -euo pipefail
     # https://discuss.linuxcontainers.org/t/snap-inside-privileged-lxd-container/13691/8
-    ln -s /bin/true /usr/local/bin/udevadm
+    ln -sf /bin/true /usr/local/bin/udevadm
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
@@ -41,8 +43,7 @@ systemd_run_default_args=--property=KillMode=mixed
 	--property=TasksMax=infinity
 	--collect
 	--setenv=SYSTEMD_NSPAWN_LOCK=0
-# TODO: check if the below 2 are required
-# --setenv=SYSTEMD_SECCOMP=0
+# TODO: add below if required:
 # --property=DevicePolicy=auto
 
 systemd_nspawn_default_args=--keep-unit

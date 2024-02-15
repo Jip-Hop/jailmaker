@@ -1,12 +1,14 @@
 # Fedora Podman Jail Template
 
+## Setup
+
 Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create mypodmanjail /mnt/tank/path/to/podman/config`.
 
 ## Rootless
 
 ### Disclaimer
 
-**These notes are a work in progress. Using podman in this setup hasn't been extensively tested.**
+**Experimental. Using podman in this setup hasn't been extensively tested.**
 
 ### Installation
 
