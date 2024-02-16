@@ -1007,7 +1007,6 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
 
         config_string = cleandoc(
             f"""
-            startup={startup}
             docker_compatible={docker_compatible}
             gpu_passthrough_intel={gpu_passthrough_intel}
             gpu_passthrough_nvidia={gpu_passthrough_nvidia}   
@@ -1130,10 +1129,13 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             """
                 )
             )
+            
+            print("Autostart has been disabled.")
+            print("You need to start this jail manually.")
+            startup = 0
+            start_now = False
 
-            if agree("Continue?", "n"):
-                cleanup(jail_path)
-                return 1
+        config_string = f"startup={startup}\n" + config_string
 
         with contextlib.suppress(FileNotFoundError):
             # Remove config which systemd handles for us
