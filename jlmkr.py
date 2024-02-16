@@ -266,6 +266,7 @@ def shell_jail(args):
     """
     return subprocess.run(["machinectl", "shell"] + args).returncode
 
+
 def parse_config_string(config_string):
     config = configparser.ConfigParser()
     # Workaround to read config file without section headers
@@ -326,7 +327,7 @@ def start_jail(jail_name):
 
     # Handle initial setup
     initial_setup = config.get("initial_setup")
-    
+
     # Alternative method to setup on first boot:
     # https://www.undrground.org/2021/01/25/adding-a-single-run-task-via-systemd/
     # If there's no machine-id, then this the first time the jail is started
@@ -359,7 +360,7 @@ def start_jail(jail_name):
             eprint()
             eprint("Abort starting jail.")
             return returncode
-        
+
         # Cleanup the initial_setup_file
         Path(initial_setup_file).unlink(missing_ok=True)
 
@@ -960,6 +961,11 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             )
         )
 
+        print()
+        start_now = agree(
+            "Do you want to start this jail now (when create is done)?", "y"
+        )
+
         # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
         # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
         # Use TasksMax=infinity since this is what docker does:
@@ -1206,16 +1212,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
         cleanup(jail_path)
         raise error
 
-    # In case you want to create a jail without any user interaction,
-    # you need to skip this final question
-    # echo 'y' | jlmkr create test testconfig
-    # TODO: make jlmkr create work cleanly without user interaction.
-    # Current echo 'y' workaround may cause problems when the jail name already exists
-    # You'd end up with a new jail called 'y'
-    # and the script will crash at the agree statement below
-    # TODO: move this question higher, above the actual creating bit
-    print()
-    if agree(f"Do you want to start jail {jail_name} right now?", "y"):
+    if start_now:
         return start_jail(jail_name)
 
 
