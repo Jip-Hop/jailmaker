@@ -1131,7 +1131,8 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
                 )
             )
 
-            if agree("Abort creating jail?", "y"):
+            if agree("Continue?", "n"):
+                cleanup(jail_path)
                 return 1
 
         with contextlib.suppress(FileNotFoundError):
