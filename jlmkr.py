@@ -266,14 +266,6 @@ def shell_jail(args):
     """
     return subprocess.run(["machinectl", "shell"] + args).returncode
 
-
-def stop_jail(jail_name):
-    """
-    Stop jail with given name.
-    """
-    return subprocess.run(["machinectl", "poweroff", jail_name]).returncode
-
-
 def parse_config_string(config_string):
     config = configparser.ConfigParser()
     # Workaround to read config file without section headers
@@ -525,7 +517,7 @@ def restart_jail(jail_name):
     Restart jail with given name.
     """
 
-    returncode = stop_jail_and_wait(jail_name)
+    returncode = stop_jail(jail_name)
     if returncode != 0:
         eprint("Abort restart.")
         return returncode
@@ -1221,6 +1213,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
     # Current echo 'y' workaround may cause problems when the jail name already exists
     # You'd end up with a new jail called 'y'
     # and the script will crash at the agree statement below
+    # TODO: move this question higher, above the actual creating bit
     print()
     if agree(f"Do you want to start jail {jail_name} right now?", "y"):
         return start_jail(jail_name)
@@ -1271,21 +1264,21 @@ def edit_jail(jail_name):
     return 0
 
 
-def stop_jail_and_wait(jail_name):
+def stop_jail(jail_name):
     """
-    Wait for jail with given name to stop.
+    Stop jail with given name and wait until stopped.
     """
 
     if not jail_is_running(jail_name):
         return 0
 
-    returncode = stop_jail(jail_name)
+    returncode = subprocess.run(["machinectl", "poweroff", jail_name]).returncode
     if returncode != 0:
         eprint("Error while stopping jail.")
         return returncode
 
     print(f"Wait for {jail_name} to stop", end="", flush=True)
-    # Need to sleep since deleting immediately after stop causes problems...
+
     while jail_is_running(jail_name):
         time.sleep(1)
         print(".", end="", flush=True)
@@ -1310,7 +1303,7 @@ def remove_jail(jail_name):
     if check == jail_name:
         print()
         jail_path = get_jail_path(jail_name)
-        returncode = stop_jail_and_wait(jail_name)
+        returncode = stop_jail(jail_name)
         if returncode != 0:
             return returncode
 
