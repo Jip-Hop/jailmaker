@@ -1129,7 +1129,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             """
                 )
             )
-            
+
             print("Autostart has been disabled.")
             print("You need to start this jail manually.")
             startup = 0
@@ -1372,46 +1372,56 @@ def list_jails():
         print("No jails.")
         return 0
 
-    for jail in jail_names:
-        jails[jail] = {"name": jail, "running": False}
-
     # Get running jails from machinectl
     running_machines = run_command_and_parse_json(["machinectl", "list", "-o", "json"])
 
-    # Augment the jails dict with output from machinectl
-    for machine in running_machines:
-        machine_name = machine["machine"]
-        # We're only interested in the list of jails made with jailmaker
-        if machine["service"] == "systemd-nspawn" and machine_name in jails:
-            addresses = (machine.get("addresses") or empty_value_indicator).split("\n")
-            if len(addresses) > 1:
-                addresses = addresses[0] + "…"
-            else:
-                addresses = addresses[0]
+    for jail_name in jail_names:
+        jails[jail_name] = {"name": jail_name, "running": False}
+        jail = jails[jail_name]
 
-            jails[machine_name] = {
-                "name": machine_name,
-                "running": True,
-                "os": machine["os"],
-                "version": machine["version"],
-                "addresses": addresses,
-            }
-
-    # TODO: add additional properties from the jails config file
-
-    for jail_name in jails:
         config = parse_config_file(get_jail_config_path(jail_name))
-
-        startup = False
         if config:
-            startup = bool(int(config.get("startup", "0")))
-        # TODO: in case config is missing or parsing fails,
-        # should an error message be thrown here?
+            # TODO: also list privileged once this setting is implemented
+            jail["startup"] = bool(int(config.get("startup", "0")))
+            jail["gpu_intel"] = bool(int(config.get("gpu_passthrough_intel", "0")))
+            jail["gpu_nvidia"] = bool(int(config.get("gpu_passthrough_nvidia", "0")))
+            initial_rootfs_image = config.get("initial_rootfs_image")
+            if initial_rootfs_image:
+                distro, release = config.get("initial_rootfs_image").split()
+                jail["os"] = distro
+                jail["version"] = release
 
-        jails[jail_name]["startup"] = startup
+        if jail_name in running_machines:
+            machine = running_machines[jail_name]
+
+            # We're only interested in the list of jails made with jailmaker
+            if machine["service"] == "systemd-nspawn":
+                # Augment the jails dict with output from machinectl
+                jail["running"] = True
+                # Override os and version we got from the config file
+                jail["os"] = machine["os"]
+                jail["version"] = machine["version"]
+
+                addresses = machine.get("addresses")
+                if not addresses:
+                    jail["addresses"] = empty_value_indicator
+                else:
+                    addresses = addresses.split("\n")
+                    jail["addresses"] = addresses[0]
+                    if len(addresses) > 1:
+                        jail["addresses"] += "…"
 
     print_table(
-        ["name", "running", "startup", "os", "version", "addresses"],
+        [
+            "name",
+            "running",
+            "startup",
+            "gpu_intel",
+            "gpu_nvidia",
+            "os",
+            "version",
+            "addresses",
+        ],
         sorted(jails.values(), key=lambda x: x["name"]),
         empty_value_indicator,
     )
