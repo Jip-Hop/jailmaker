@@ -1,6 +1,6 @@
 startup=0
-gpu_passthrough_intel=0
-gpu_passthrough_nvidia=0   
+gpu_passthrough_intel=1
+gpu_passthrough_nvidia=0
 
 # Use macvlan networking to provide an isolated network namespace,
 # so docker can manage firewall rules
@@ -14,18 +14,23 @@ systemd_nspawn_user_args=--network-macvlan=eno1
 # Script to run on the HOST before starting the jail
 # Load kernel module and config kernel settings required for docker
 pre_start_hook=#!/usr/bin/bash
+    set -euo pipefail
     echo 'PRE_START_HOOK'
     echo 1 > /proc/sys/net/ipv4/ip_forward
     modprobe br_netfilter
     echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
+# Only used while creating the jail
+distro=debian
+release=bookworm
+
 # Install docker inside the jail:
 # https://docs.docker.com/engine/install/debian/#install-using-the-repository
 # NOTE: this script will run in the host networking namespace and ignores
 # all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
-	set -euo pipefail
+    set -euo pipefail
 
     apt-get update && apt-get -y install ca-certificates curl
     install -m 0755 -d /etc/apt/keyrings
@@ -41,19 +46,16 @@ initial_setup=#!/usr/bin/bash
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
-	--property=Type=notify
-	--property=RestartForceExitStatus=133
-	--property=SuccessExitStatus=133
-	--property=Delegate=yes
-	--property=TasksMax=infinity
-	--collect
-	--setenv=SYSTEMD_NSPAWN_LOCK=0
+    --property=Type=notify
+    --property=RestartForceExitStatus=133
+    --property=SuccessExitStatus=133
+    --property=Delegate=yes
+    --property=TasksMax=infinity
+    --collect
+    --setenv=SYSTEMD_NSPAWN_LOCK=0
 
 systemd_nspawn_default_args=--keep-unit
-	--quiet
-	--boot
-	--bind-ro=/sys/module
-	--inaccessible=/sys/module/apparmor
-
-# Used by jlmkr create
-initial_rootfs_image=debian bookworm
+    --quiet
+    --boot
+    --bind-ro=/sys/module
+    --inaccessible=/sys/module/apparmor
