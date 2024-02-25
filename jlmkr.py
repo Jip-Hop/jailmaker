@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+"""Create persistent Linux 'jails' on TrueNAS SCALE, \
+with full access to all files via bind mounts, \
+thanks to systemd-nspawn!"""
+
+__version__ = "1.0.1"
+
+__disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
+IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
+
 import argparse
 import configparser
 import contextlib
@@ -7,6 +16,7 @@ import ctypes
 import errno
 import glob
 import hashlib
+import io
 import json
 import os
 import platform
@@ -25,25 +35,79 @@ from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
 
-# Only set a color if we have an interactive tty
-if sys.stdout.isatty():
-    BOLD = "\033[1m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    UNDERLINE = "\033[4m"
-    NORMAL = "\033[0m"
-else:
-    BOLD = RED = YELLOW = UNDERLINE = NORMAL = ""
+DEFAULT_CONFIG = """startup=0
+gpu_passthrough_intel=0
+gpu_passthrough_nvidia=0
+docker_compatible=0
 
-DISCLAIMER = f"""{YELLOW}{BOLD}USE THIS SCRIPT AT YOUR OWN RISK!
-IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.{NORMAL}"""
+# Add additional systemd-nspawn flags
+# E.g. to mount host storage in the jail (--bind-ro for readonly):
+# --bind='/mnt/pool/dataset:/home' --bind-ro=/etc/certificates
+# E.g. macvlan networking:
+# --network-macvlan=eno1 --resolv-conf=bind-host
+# E.g. bridge networking:
+# --network-bridge=br1 --resolv-conf=bind-host
+# E.g. add capabilities required by docker:
+# --system-call-filter='add_key keyctl bpf'
+systemd_nspawn_user_args=
 
-DESCRIPTION = (
-    "Create persistent Linux 'jails' on TrueNAS SCALE, with full access to all files \
-    via bind mounts, thanks to systemd-nspawn!"
-)
+# Specify command/script to run on the HOST before starting the jail
+# For example to load kernel modules and config kernel settings
+pre_start_hook=
+# pre_start_hook=#!/usr/bin/bash
+#     set -euo pipefail
+#     echo 'PRE_START_HOOK_EXAMPLE'
+#     echo 1 > /proc/sys/net/ipv4/ip_forward
+#     modprobe br_netfilter
+#     echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
+#     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
-VERSION = "1.0.1"
+# Specify a command/script to run on the HOST after stopping the jail
+post_stop_hook=
+# post_stop_hook=echo 'POST_STOP_HOOK_EXAMPLE'
+
+# Only used while creating the jail
+distro=debian
+release=bookworm
+
+# Specify command/script to run IN THE JAIL before the first start
+# Useful to install packages on top of the base rootfs
+# NOTE: this script will run in the host networking namespace and
+# ignores all systemd_nspawn_user_args such as bind mounts
+initial_setup=
+# initial_setup=bash -c 'apt-get update && apt-get -y upgrade'
+
+# Usually no need to change systemd_run_default_args
+systemd_run_default_args=--collect
+    --property=Delegate=yes
+    --property=RestartForceExitStatus=133
+    --property=SuccessExitStatus=133
+    --property=TasksMax=infinity
+    --property=Type=notify
+    --setenv=SYSTEMD_NSPAWN_LOCK=0
+    --property=KillMode=mixed
+
+# Usually no need to change systemd_nspawn_default_args
+systemd_nspawn_default_args=--bind-ro=/sys/module
+    --boot
+    --inaccessible=/sys/module/apparmor
+    --quiet
+    --keep-unit"""
+
+# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
+# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
+# Use TasksMax=infinity since this is what docker does:
+# https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
+
+# Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
+# Would give "directory tree currently busy" error and I'd have to run
+# `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
+# Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
+# with the same name anyway: as long as we're starting jails using this script,
+# it won't be possible to start the same jail twice
+
+# Always add --bind-ro=/sys/module to make lsmod happy
+# https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
 
 JAILS_DIR_PATH = "jails"
 JAIL_CONFIG_NAME = "config"
@@ -57,6 +121,141 @@ SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
 SYMLINK_NAME = "jlmkr"
 TEXT_EDITOR = "nano"
+
+# Only set a color if we have an interactive tty
+if sys.stdout.isatty():
+    BOLD = "\033[1m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    UNDERLINE = "\033[4m"
+    NORMAL = "\033[0m"
+else:
+    BOLD = RED = YELLOW = UNDERLINE = NORMAL = ""
+
+DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
+
+# Used in parser getters to indicate the default behavior when a specific
+# option is not found it to raise an exception. Created to enable `None` as
+# a valid fallback value.
+_UNSET = object()
+
+
+class KeyValueParser(configparser.ConfigParser):
+    """Simple comment preserving parser based on ConfigParser.
+    Reads a file containing key/value pairs and/or comments.
+    Values can span multiple lines, as long as they are indented
+    deeper than the first line of the value. Comments or keys
+    must NOT be indented.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Set defaults if not specified by user
+        if "interpolation" not in kwargs:
+            kwargs["interpolation"] = None
+        if "allow_no_value" not in kwargs:
+            kwargs["allow_no_value"] = True
+        if "comment_prefixes" not in kwargs:
+            kwargs["comment_prefixes"] = "#"
+
+        super().__init__(*args, **kwargs)
+
+        # Backup _comment_prefixes
+        self._comment_prefixes_backup = self._comment_prefixes
+        # Unset _comment_prefixes so comments won't be skipped
+        self._comment_prefixes = ()
+        # Starting point for the comment IDs
+        self._comment_id = 0
+        # Default delimiter to use
+        delimiter = self._delimiters[0]
+        # Template to store comments as key value pair
+        self._comment_template = "#{0} " + delimiter + " {1}"
+        # Regex to match the comment prefix
+        self._comment_regex = re.compile(f"^#\d+\s*{re.escape(delimiter)}[^\S\n]*")
+        # Regex to match cosmetic newlines (skips newlines in multiline values):
+        # consecutive whitespace from start of line followed by a line not starting with whitespace
+        self._cosmetic_newlines_regex = re.compile(r"^(\s+)(?=^\S)", re.MULTILINE)
+        # Dummy section name
+        self._section_name = "a"
+
+    def _find_cosmetic_newlines(self, text):
+        # Indices of the lines containing cosmetic newlines
+        cosmetic_newline_indices = set()
+        for match in re.finditer(self._cosmetic_newlines_regex, text):
+            start_index = text.count("\n", 0, match.start())
+            end_index = start_index + text.count("\n", match.start(), match.end())
+            cosmetic_newline_indices.update(range(start_index, end_index))
+
+        return cosmetic_newline_indices
+
+    def _read(self, fp, fpname):
+        lines = fp.readlines()
+        cosmetic_newline_indices = self._find_cosmetic_newlines("".join(lines))
+        # Preprocess config file to preserve comments
+        for i, line in enumerate(lines):
+            if i in cosmetic_newline_indices or line.startswith(
+                self._comment_prefixes_backup
+            ):
+                # Store cosmetic newline or comment with unique key
+                lines[i] = self._comment_template.format(self._comment_id, line)
+                self._comment_id += 1
+
+        # Convert to in-memory file and prepend a dummy section header
+        lines = io.StringIO(f"[{self._section_name}]\n" + "".join(lines))
+        # Feed preprocessed file to original _read method
+        return super()._read(lines, fpname)
+
+    def read_default_string(self, string, source="<string>"):
+        # Ignore all comments when parsing default key/values
+        string = "\n".join(
+            [
+                line
+                for line in string.splitlines()
+                if not line.startswith(self._comment_prefixes_backup)
+            ]
+        )
+        # Feed preprocessed file to original _read method
+        return super()._read(io.StringIO("[DEFAULT]\n" + string), source)
+
+    def write(self, fp, space_around_delimiters=False):
+        # Write the config to an in-memory file
+        with io.StringIO() as sfile:
+            super().write(sfile, space_around_delimiters)
+            # Start from the beginning of sfile
+            sfile.seek(0)
+
+            line = sfile.readline()
+            # Throw away lines until we reach the dummy section header
+            while line.strip() != f"[{self._section_name}]":
+                line = sfile.readline()
+
+            lines = sfile.readlines()
+
+        for i, line in enumerate(lines):
+            # Remove the comment id prefix
+            lines[i] = self._comment_regex.sub("", line, 1)
+
+        fp.write("".join(lines).rstrip())
+
+    # Set value for specified option key
+    def my_set(self, option, value):
+        if isinstance(value, bool):
+            value = str(int(value))
+        elif not isinstance(value, str):
+            value = str(value)
+
+        super().set(self._section_name, option, value)
+
+    # Return value for specified option key
+    def my_get(self, option):
+        return super().get(self._section_name, option)
+
+    # Return value converted to boolean for specified option key
+    def my_getboolean(self, option, fallback=_UNSET):
+        return super().getboolean(self._section_name, option, fallback=fallback)
+
+    # # Return all keys inside our only section
+    # def my_options(self):
+    #     return super().options(self._section_name)
 
 
 def eprint(*args, **kwargs):
@@ -267,17 +466,15 @@ def shell_jail(args):
     return subprocess.run(["machinectl", "shell"] + args).returncode
 
 
-def parse_config_string(config_string):
-    config = configparser.ConfigParser()
-    # Workaround to read config file without section headers
-    config.read_string("[DEFAULT]\n" + config_string)
-    config = dict(config["DEFAULT"])
-    return config
-
-
 def parse_config_file(jail_config_path):
+    config = KeyValueParser()
+    # Read default config to fallback to default values
+    # for keys not found in the jail_config_path file
+    config.read_default_string(DEFAULT_CONFIG)
     try:
-        return parse_config_string(Path(jail_config_path).read_text())
+        with open(jail_config_path, "r") as fp:
+            config.read_file(fp)
+        return config
     except FileNotFoundError:
         eprint(f"Unable to find config file: {jail_config_path}.")
         return
@@ -326,7 +523,7 @@ def start_jail(jail_name):
         return 1
 
     # Handle initial setup
-    initial_setup = config.get("initial_setup")
+    initial_setup = config.my_get("initial_setup")
 
     # Alternative method to setup on first boot:
     # https://www.undrground.org/2021/01/25/adding-a-single-run-task-via-systemd/
@@ -334,7 +531,8 @@ def start_jail(jail_name):
     if initial_setup and not os.path.exists(
         os.path.join(jail_rootfs_path, "etc/machine-id")
     ):
-        # Run the command directly if it doesn't start with a shebang
+        initial_setup_file = None
+
         if initial_setup.startswith("#!"):
             # Write a script file and call that
             initial_setup_file = os.path.abspath(
@@ -351,18 +549,27 @@ def start_jail(jail_name):
                 "/root/initial_startup",
             ]
         else:
-            cmd = ["systemd-nspawn", "-q", "-D", jail_rootfs_path, initial_setup]
+            # Run the command directly if it doesn't start with a shebang
+            cmd = [
+                "systemd-nspawn",
+                "-q",
+                "-D",
+                jail_rootfs_path,
+                *shlex.split(initial_setup),
+            ]
 
         returncode = subprocess.run(cmd).returncode
+
+        # Cleanup the initial_setup_file
+        if initial_setup_file:
+            Path(initial_setup_file).unlink(missing_ok=True)
+
         if returncode != 0:
             eprint("Failed to run initial setup:")
             eprint(initial_setup)
             eprint()
             eprint("Abort starting jail.")
             return returncode
-
-        # Cleanup the initial_setup_file
-        Path(initial_setup_file).unlink(missing_ok=True)
 
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
@@ -387,7 +594,7 @@ def start_jail(jail_name):
     #   - how to call the option to enable ip_forward and bridge-nf-call?
     #   - add CSV value for preloading kernel modules like linux.kernel_modules in LXC
 
-    if config.get("docker_compatible") == "1":
+    if config.my_getboolean("docker_compatible"):
         # Enable ip forwarding on the host (docker needs it)
         print(1, file=open("/proc/sys/net/ipv4/ip_forward", "w"))
 
@@ -450,26 +657,27 @@ def start_jail(jail_name):
     add_hook(
         jail_path,
         systemd_run_additional_args,
-        config.get("pre_start_hook"),
+        config.my_get("pre_start_hook"),
         "ExecStartPre",
     )
 
     add_hook(
         jail_path,
         systemd_run_additional_args,
-        config.get("post_stop_hook"),
+        config.my_get("post_stop_hook"),
         "ExecStopPost",
     )
 
     # Legacy gpu_passthrough config setting
-    if config.get("gpu_passthrough") == "1":
-        gpu_passthrough_intel = "1"
-        gpu_passthrough_nvidia = "1"
+    # TODO: deprecate this and stop supporting it
+    if config.my_getboolean("gpu_passthrough", False):
+        gpu_passthrough_intel = True
+        gpu_passthrough_nvidia = True
     else:
-        gpu_passthrough_intel = config.get("gpu_passthrough_intel")
-        gpu_passthrough_nvidia = config.get("gpu_passthrough_nvidia")
+        gpu_passthrough_intel = config.my_getboolean("gpu_passthrough_intel")
+        gpu_passthrough_nvidia = config.my_getboolean("gpu_passthrough_nvidia")
 
-    if gpu_passthrough_intel == "1" or gpu_passthrough_nvidia == "1":
+    if gpu_passthrough_intel or gpu_passthrough_nvidia:
         systemd_nspawn_additional_args.append("--property=DeviceAllow=char-drm rw")
 
     passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args)
@@ -479,13 +687,13 @@ def start_jail(jail_name):
 
     cmd = [
         "systemd-run",
-        *shlex.split(config.get("systemd_run_default_args", "")),
+        *shlex.split(config.my_get("systemd_run_default_args")),
         *systemd_run_additional_args,
         "--",
         "systemd-nspawn",
-        *shlex.split(config.get("systemd_nspawn_default_args", "")),
+        *shlex.split(config.my_get("systemd_nspawn_default_args")),
         *systemd_nspawn_additional_args,
-        *shlex.split(config.get("systemd_nspawn_user_args", "")),
+        *shlex.split(config.my_get("systemd_nspawn_user_args")),
     ]
 
     print(
@@ -710,12 +918,21 @@ def ask_jail_name(jail_name=""):
                 return jail_name
 
 
-def create_jail(jail_name="", config_path=None, distro="debian", release="bookworm"):
+def agree_with_default(config, key, question):
+    default_answer = "y" if config.my_getboolean(key) else "n"
+    config.my_set(key, agree(question, default_answer))
+
+
+def create_jail_interactive():
     """
     Create jail with given name.
     """
 
-    config_string = ""
+    config = KeyValueParser()
+    config.read_string(DEFAULT_CONFIG)
+
+    recommended_distro = config.my_get("distro")
+    recommended_release = config.my_get("release")
 
     print(DISCLAIMER)
 
@@ -755,48 +972,39 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
     #################
     # Config handling
     #################
+    jail_name = ""
 
-    if config_path:
-        try:
-            config_string = Path(config_path).read_text()
-        except FileNotFoundError:
-            eprint(f"Unable to find file: {config_path}.")
-            return 1
-    else:
-        print()
-        if agree("Do you wish to create a jail from a config template?", "n"):
-            print(
-                dedent(
-                    """
-                A text editor will open so you can provide the config template.
+    print()
+    if agree("Do you wish to create a jail from a config template?", "n"):
+        print(
+            dedent(
+                """
+            A text editor will open so you can provide the config template.
 
-                - please copy your config
-                - paste it into the text editor      
-                - save and close the text editor
-            """
-                )
+              1. Please copy your config
+              2. Paste it into the text editor
+              3. Save and close the text editor
+        """
             )
-            input("Press Enter to open the text editor.")
+        )
+        input("Press Enter to open the text editor.")
 
-            with tempfile.NamedTemporaryFile() as f:
-                subprocess.call([TEXT_EDITOR, f.name])
-                f.seek(0)
-                config_string = f.read().decode()
+        with tempfile.NamedTemporaryFile(mode="w+t") as f:
+            subprocess.call([TEXT_EDITOR, f.name])
+            f.seek(0)
+            # Start over with a new KeyValueParser to parse user config
+            config = KeyValueParser()
+            config.read_file(f)
 
-    if config_string:
-        config = parse_config_string(config_string)
-        # Ask for jail name if not provided
-        if not (
-            jail_name
-            and check_jail_name_valid(jail_name)
-            and check_jail_name_available(jail_name)
-        ):
-            jail_name = ask_jail_name(jail_name)
+        # Ask for jail name
+        jail_name = ask_jail_name(jail_name)
         jail_path = get_jail_path(jail_name)
-        distro, release = config.get("initial_rootfs_image").split()
     else:
         print()
-        if not agree(f"Install the recommended image ({distro} {release})?", "y"):
+        if not agree(
+            f"Install the recommended image ({recommended_distro} {recommended_release})?",
+            "y",
+        ):
             print(
                 dedent(
                     f"""
@@ -823,7 +1031,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
                 )
             )
 
-            distro = input("Distro: ")
+            config.my_set("distro", input("Distro: "))
 
             print(
                 dedent(
@@ -833,7 +1041,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
                 )
             )
 
-            release = input("Release: ")
+            config.my_set("release", input("Release: "))
 
         jail_name = ask_jail_name(jail_name)
         jail_path = get_jail_path(jail_name)
@@ -848,29 +1056,17 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             )
         )
 
-        # TODO: ask to setup hooks and initial_setup
-        # Open text editor with current config file
-        # Or don't ask and make this a template-only feature,
-        # make it possible to override values in the template during jlmkr create with cli args
-
-        docker_compatible = 0
-
-        if agree("Make jail docker compatible right now?", "n"):
-            docker_compatible = 1
-
+        agree_with_default(
+            config, "docker_compatible", "Make jail docker compatible right now?"
+        )
         print()
-
-        gpu_passthrough_intel = 0
-
-        if agree("Passthrough the intel GPU (if present)?", "n"):
-            gpu_passthrough_intel = 1
-
+        agree_with_default(
+            config, "gpu_passthrough_intel", "Passthrough the intel GPU (if present)?"
+        )
         print()
-
-        gpu_passthrough_nvidia = 0
-
-        if agree("Passthrough the nvidia GPU (if present)?", "n"):
-            gpu_passthrough_nvidia = 1
+        agree_with_default(
+            config, "gpu_passthrough_nvidia", "Passthrough the nvidia GPU (if present)?"
+        )
 
         print(
             dedent(
@@ -889,10 +1085,10 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
         else:
             try:
                 base_os_version = platform.freedesktop_os_release().get(
-                    "VERSION_CODENAME", release
+                    "VERSION_CODENAME", recommended_release
                 )
             except AttributeError:
-                base_os_version = release
+                base_os_version = recommended_release
             print(
                 dedent(
                     f"""
@@ -916,7 +1112,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             --bind='/mnt/pool/dataset:/home'
             Or the same, but readonly, with:
             --bind-ro='/mnt/pool/dataset:/home'
-            Or create MACVLAN interface for static IP, with:
+            Or create macvlan interface with:
             --network-macvlan=eno1 --resolv-conf=bind-host
         """
             )
@@ -941,7 +1137,11 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
         # https://github.com/python-cmd2/cmd2/blob/ee7599f9ac0dbb6ce3793f6b665ba1200d3ef9a3/cmd2/cmd2.py
         # https://stackoverflow.com/a/40152927
 
-        systemd_nspawn_user_args = input("Additional flags: ") or ""
+        config.my_set(
+            "systemd_nspawn_user_args",
+            "\n    ".join(shlex.split(input("Additional flags: ") or "")),
+        )
+
         # Disable tab auto completion
         readline.parse_and_bind("tab: self-insert")
 
@@ -954,113 +1154,47 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
             )
         )
 
-        startup = int(
+        config.my_set(
+            "startup",
             agree(
                 f"Do you want to start this jail when running: {COMMAND_NAME} startup?",
                 "n",
-            )
+            ),
         )
 
-        print()
-        start_now = agree(
-            "Do you want to start this jail now (when create is done)?", "y"
-        )
+    print()
+    start_now = agree("Do you want to start this jail now (when create is done)?", "y")
 
-        # Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
-        # https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
-        # Use TasksMax=infinity since this is what docker does:
-        # https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
-
-        # Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
-        # Would give "directory tree currently busy" error and I'd have to run
-        # `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
-        # Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
-        # with the same name anyway: as long as we're starting jails using this script,
-        # it won't be possible to start the same jail twice
-
-        systemd_run_default_args = [
-            "--property=KillMode=mixed",
-            "--property=Type=notify",
-            "--property=RestartForceExitStatus=133",
-            "--property=SuccessExitStatus=133",
-            "--property=Delegate=yes",
-            "--property=TasksMax=infinity",
-            "--collect",
-            "--setenv=SYSTEMD_NSPAWN_LOCK=0",
-        ]
-
-        # Always add --bind-ro=/sys/module to make lsmod happy
-        # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
-        systemd_nspawn_default_args = [
-            "--keep-unit",
-            "--quiet",
-            "--boot",
-            "--bind-ro=/sys/module",
-            "--inaccessible=/sys/module/apparmor",
-        ]
-
-        systemd_nspawn_user_args_multiline = "\n\t".join(
-            shlex.split(systemd_nspawn_user_args)
-        )
-        systemd_run_default_args_multiline = "\n\t".join(systemd_run_default_args)
-        systemd_nspawn_default_args_multiline = "\n\t".join(systemd_nspawn_default_args)
-
-        config_string = cleandoc(
-            f"""
-            docker_compatible={docker_compatible}
-            gpu_passthrough_intel={gpu_passthrough_intel}
-            gpu_passthrough_nvidia={gpu_passthrough_nvidia}   
-        """
-        )
-
-        config_string += (
-            f"\n\nsystemd_nspawn_user_args={systemd_nspawn_user_args_multiline}\n\n"
-        )
-
-        config_string += cleandoc(
-            """
-            # # Specify command/script to run on the HOST before starting the jail
-            # # For example to load kernel modules and config kernel settings
-            # pre_start_hook=#!/usr/bin/bash
-            #     echo 'PRE_START_HOOK'
-            #     echo 1 > /proc/sys/net/ipv4/ip_forward
-            #     modprobe br_netfilter
-            #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
-            #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
-            # 
-            # # Specify a command/script to run on the HOST after stopping the jail
-            # post_stop_hook=echo 'POST_STOP_HOOK'
-            
-            # # Specify command/script to run IN THE JAIL before starting it for the first time
-            # # Useful to install packages on top of the base rootfs
-            # # NOTE: this script will run in the host networking namespace and ignores
-            # # all systemd_nspawn_user_args such as bind mounts
-            # initial_setup=#!/usr/bin/bash
-            #     set -euo pipefail
-            #     apt-get update && apt-get -y install curl
-            #     curl -fsSL https://get.docker.com | sh
-        """
-        )
-
-        config_string += "\n".join(
-            [
-                "",
-                "",
-                "# You generally will not need to change the options below",
-                f"systemd_run_default_args={systemd_run_default_args_multiline}",
-                "",
-                f"systemd_nspawn_default_args={systemd_nspawn_default_args_multiline}",
-                "",
-                "# Used by jlmkr create",
-                f"initial_rootfs_image={distro} {release}",
-            ]
-        )
-
-        print()
+    print()
 
     ##############
     # Create start
     ##############
+
+    create_options = {
+        "jail_name": jail_name,
+        "jail_path": jail_path,
+        "start_now": start_now,
+        "config": config,
+    }
+
+    rc = write_jail(create_options)
+    if rc != 0:
+        return rc
+
+    if create_options["start_now"]:
+        return start_jail(jail_name)
+
+    return 0
+
+
+def write_jail(create_options):
+    jail_name = create_options["jail_name"]
+    jail_path = create_options["jail_path"]
+    config = create_options["config"]
+
+    distro = config.my_get("distro")
+    release = config.my_get("release")
 
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
@@ -1132,10 +1266,8 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
 
             print("Autostart has been disabled.")
             print("You need to start this jail manually.")
-            startup = 0
-            start_now = False
-
-        config_string = f"startup={startup}\n" + config_string
+            config.my_set("startup", 0)
+            create_options["start_now"] = False
 
         with contextlib.suppress(FileNotFoundError):
             # Remove config which systemd handles for us
@@ -1206,7 +1338,8 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
                 file=open(os.path.join(preset_path, "00-jailmaker.preset"), "w"),
             )
 
-        print(config_string, file=open(jail_config_path, "w"))
+        with open(jail_config_path, "w") as fp:
+            config.write(fp)
 
         os.chmod(jail_config_path, 0o600)
 
@@ -1215,8 +1348,7 @@ def create_jail(jail_name="", config_path=None, distro="debian", release="bookwo
         cleanup(jail_path)
         raise error
 
-    if start_now:
-        return start_jail(jail_name)
+    return 0
 
 
 def jail_is_running(jail_name):
@@ -1358,6 +1490,17 @@ def get_all_jail_names():
     return jail_names
 
 
+def parse_os_release(candidates):
+    for candidate in candidates:
+        try:
+            with open(candidate, encoding="utf-8") as f:
+                return platform._parse_os_release(f)
+        except OSError:
+            # Silently ignore failing to read os release info
+            pass
+    return {}
+
+
 def list_jails():
     """
     List all available and running jails.
@@ -1374,42 +1517,58 @@ def list_jails():
 
     # Get running jails from machinectl
     running_machines = run_command_and_parse_json(["machinectl", "list", "-o", "json"])
+    # Index running_machines by machine name
+    # We're only interested in systemd-nspawn machines
+    running_machines = {
+        item["machine"]: item
+        for item in running_machines
+        if item["service"] == "systemd-nspawn"
+    }
 
     for jail_name in jail_names:
+        jail_rootfs_path = get_jail_rootfs_path(jail_name)
         jails[jail_name] = {"name": jail_name, "running": False}
         jail = jails[jail_name]
 
         config = parse_config_file(get_jail_config_path(jail_name))
         if config:
             # TODO: also list privileged once this setting is implemented
-            jail["startup"] = bool(int(config.get("startup", "0")))
-            jail["gpu_intel"] = bool(int(config.get("gpu_passthrough_intel", "0")))
-            jail["gpu_nvidia"] = bool(int(config.get("gpu_passthrough_nvidia", "0")))
-            initial_rootfs_image = config.get("initial_rootfs_image")
-            if initial_rootfs_image:
-                distro, release = config.get("initial_rootfs_image").split()
-                jail["os"] = distro
-                jail["version"] = release
+            jail["startup"] = config.my_getboolean("startup")
+
+            # TODO: deprecate gpu_passthrough and stop supporting it
+            if config.my_getboolean("gpu_passthrough", False):
+                jail["gpu_intel"] = True
+                jail["gpu_nvidia"] = True
+            else:
+                jail["gpu_intel"] = config.my_getboolean("gpu_passthrough_intel")
+                jail["gpu_nvidia"] = config.my_getboolean("gpu_passthrough_nvidia")
 
         if jail_name in running_machines:
             machine = running_machines[jail_name]
+            # Augment the jails dict with output from machinectl
+            jail["running"] = True
+            jail["os"] = machine["os"]
+            jail["version"] = machine["version"]
 
-            # We're only interested in the list of jails made with jailmaker
-            if machine["service"] == "systemd-nspawn":
-                # Augment the jails dict with output from machinectl
-                jail["running"] = True
-                # Override os and version we got from the config file
-                jail["os"] = machine["os"]
-                jail["version"] = machine["version"]
+            addresses = machine.get("addresses")
+            if not addresses:
+                jail["addresses"] = empty_value_indicator
+            else:
+                addresses = addresses.split("\n")
+                jail["addresses"] = addresses[0]
+                if len(addresses) > 1:
+                    jail["addresses"] += "…"
+        else:
+            # Parse os-release info ourselves
+            jail_platform = parse_os_release(
+                (
+                    os.path.join(jail_rootfs_path, "etc/os-release"),
+                    os.path.join(jail_rootfs_path, "usr/lib/os-release"),
+                )
+            )
 
-                addresses = machine.get("addresses")
-                if not addresses:
-                    jail["addresses"] = empty_value_indicator
-                else:
-                    addresses = addresses.split("\n")
-                    jail["addresses"] = addresses[0]
-                    if len(addresses) > 1:
-                        jail["addresses"] += "…"
+            jail["os"] = jail_platform.get("ID")
+            jail["version"] = jail_platform.get("VERSION_ID")
 
     print_table(
         [
@@ -1559,7 +1718,7 @@ def startup_jails():
     start_failure = False
     for jail_name in get_all_jail_names():
         config = parse_config_file(get_jail_config_path(jail_name))
-        if config and config.get("startup") == "1":
+        if config and config.my_getboolean("startup"):
             if start_jail(jail_name) != 0:
                 start_failure = True
 
@@ -1575,9 +1734,9 @@ def main():
             f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`."
         )
 
-    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=DISCLAIMER)
+    parser = argparse.ArgumentParser(description=__doc__, epilog=DISCLAIMER)
 
-    parser.add_argument("--version", action="version", version=VERSION)
+    parser.add_argument("--version", action="version", version=__version__)
 
     subparsers = parser.add_subparsers(title="commands", dest="subcommand", metavar="")
 
@@ -1587,11 +1746,7 @@ def main():
         help="install jailmaker dependencies and create symlink",
     )
 
-    create_parser = subparsers.add_parser(
-        name="create", epilog=DISCLAIMER, help="create a new jail"
-    )
-    create_parser.add_argument("name", nargs="?", help="name of the jail")
-    create_parser.add_argument("config", nargs="?", help="path to config file template")
+    subparsers.add_parser(name="create", epilog=DISCLAIMER, help="create a new jail")
 
     subparsers.add_parser(
         name="start", epilog=DISCLAIMER, help="start a previously created jail"
@@ -1665,7 +1820,7 @@ def main():
         sys.exit(install_jailmaker())
 
     elif args.subcommand == "create":
-        sys.exit(create_jail(args.name, args.config))
+        sys.exit(create_jail_interactive())
 
     elif args.subcommand == "start":
         sys.exit(start_jail(args.name))
@@ -1706,7 +1861,7 @@ def main():
     else:
         if agree("Create a new jail?", "y"):
             print()
-            sys.exit(create_jail())
+            sys.exit(create_jail_interactive())
         else:
             parser.print_usage()
 
