@@ -39,19 +39,25 @@ After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases
 
 ### Create Jail
 
-Creating a jail is interactive. You'll be presented with questions which guide you through the process.
+Creating jail with the default settings is as simple as:
 
 ```shell
 jlmkr create myjail
 ```
 
-After answering some questions you should have your first jail up and running!
-
 You may also specify a path to a config template, for a quick and consistent jail creation process.
 
 ```shell
-jlmkr create myjail /path/to/config/template
+jlmkr create --config /path/to/config/template myjail
 ```
+
+If you omit the jail name, the create process is interactive. You'll be presented with questions which guide you through the process.
+
+```shell
+jlmkr create
+```
+
+After answering some questions you should have your first jail up and running!
 
 ### Startup Jails on Boot
 

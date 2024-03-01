@@ -240,6 +240,8 @@ class KeyValueParser(configparser.ConfigParser):
     def my_set(self, option, value):
         if isinstance(value, bool):
             value = str(int(value))
+        elif isinstance(value, list):
+            value = str("\n    ".join(value))
         elif not isinstance(value, str):
             value = str(value)
 
@@ -253,9 +255,23 @@ class KeyValueParser(configparser.ConfigParser):
     def my_getboolean(self, option, fallback=_UNSET):
         return super().getboolean(self._section_name, option, fallback=fallback)
 
-    # # Return all keys inside our only section
-    # def my_options(self):
-    #     return super().options(self._section_name)
+
+class ExceptionWithParser(Exception):
+    def __init__(self, parser, message):
+        self.parser = parser
+        self.message = message
+        super().__init__(message)
+
+
+# Workaround for exit_on_error=False not applying to:
+# "error: the following arguments are required"
+# https://github.com/python/cpython/issues/103498
+class CustomSubParser(argparse.ArgumentParser):
+    def error(self, message):
+        if self.exit_on_error:
+            super().error(message)
+        else:
+            raise ExceptionWithParser(self, message)
 
 
 def eprint(*args, **kwargs):
@@ -420,7 +436,7 @@ def passthrough_nvidia(
     systemd_nspawn_additional_args += nvidia_mounts
 
 
-def exec_jail(jail_name, cmd, args):
+def exec_jail(jail_name, cmd):
     """
     Execute a command in the jail with given name.
     """
@@ -434,9 +450,8 @@ def exec_jail(jail_name, cmd, args):
             "--wait",
             "--collect",
             "--service-type=exec",
-            cmd,
+            *cmd,
         ]
-        + args
     ).returncode
 
 
@@ -923,11 +938,7 @@ def agree_with_default(config, key, question):
     config.my_set(key, agree(question, default_answer))
 
 
-def create_jail_interactive():
-    """
-    Create jail with given name.
-    """
-
+def interactive_config():
     config = KeyValueParser()
     config.read_string(DEFAULT_CONFIG)
 
@@ -998,7 +1009,6 @@ def create_jail_interactive():
 
         # Ask for jail name
         jail_name = ask_jail_name(jail_name)
-        jail_path = get_jail_path(jail_name)
     else:
         print()
         if not agree(
@@ -1044,7 +1054,6 @@ def create_jail_interactive():
             config.my_set("release", input("Release: "))
 
         jail_name = ask_jail_name(jail_name)
-        jail_path = get_jail_path(jail_name)
 
         print(
             dedent(
@@ -1167,31 +1176,67 @@ def create_jail_interactive():
 
     print()
 
-    ##############
-    # Create start
-    ##############
-
-    create_options = {
-        "jail_name": jail_name,
-        "jail_path": jail_path,
-        "start_now": start_now,
-        "config": config,
-    }
-
-    rc = write_jail(create_options)
-    if rc != 0:
-        return rc
-
-    if create_options["start_now"]:
-        return start_jail(jail_name)
-
-    return 0
+    return jail_name, config, start_now
 
 
-def write_jail(create_options):
-    jail_name = create_options["jail_name"]
-    jail_path = create_options["jail_path"]
-    config = create_options["config"]
+def create_jail(**kwargs):
+    jail_name = kwargs.pop("jail_name", None)
+    start_now = False
+
+    # Non-interactive create
+    if jail_name:
+        if not check_jail_name_valid(jail_name):
+            return 1
+
+        if not check_jail_name_available(jail_name):
+            return 1
+
+        jail_config_path = kwargs.pop("config")
+
+        config = KeyValueParser()
+
+        if jail_config_path:
+            print(f"Creating jail {jail_name} from config template {jail_config_path}.")
+            if jail_config_path not in config.read(jail_config_path):
+                eprint(f"Failed to read config config template {jail_config_path}.")
+                return 1
+        else:
+            print(f"Creating jail {jail_name} with default config.")
+            config.read_string(DEFAULT_CONFIG)
+
+        user_overridden = False
+
+        for option in [
+            "distro",
+            "docker_compatible",
+            "gpu_passthrough_intel",
+            "gpu_passthrough_nvidia",
+            "release",
+            "startup",
+            "systemd_nspawn_user_args",
+        ]:
+            value = kwargs.pop(option)
+            if value:
+                # TODO: this will wipe all systemd_nspawn_user_args from the template...
+                # Should there be an option to append them instead?
+                print(f"Overriding {option} config value with {value}.")
+                config.my_set(option, value)
+                user_overridden = True
+
+        if not user_overridden:
+            print(
+                dedent(
+                    f"""
+                    TIP: Run `{SYMLINK_NAME} create` without any arguments for interactive config.
+                    Or use CLI args to override the default options.
+                    For more info, run: `{SYMLINK_NAME} create --help`
+                  """
+                )
+            )
+    else:
+        jail_name, config, start_now = interactive_config()
+
+    jail_path = get_jail_path(jail_name)
 
     distro = config.my_get("distro")
     release = config.my_get("release")
@@ -1267,7 +1312,7 @@ def write_jail(create_options):
             print("Autostart has been disabled.")
             print("You need to start this jail manually.")
             config.my_set("startup", 0)
-            create_options["start_now"] = False
+            start_now = False
 
         with contextlib.suppress(FileNotFoundError):
             # Remove config which systemd handles for us
@@ -1347,6 +1392,9 @@ def write_jail(create_options):
     except BaseException as error:
         cleanup(jail_path)
         raise error
+
+    if start_now:
+        return start_jail(jail_name)
 
     return 0
 
@@ -1728,84 +1776,205 @@ def startup_jails():
     return 0
 
 
+def split_at_string(lst, string):
+    try:
+        index = lst.index(string)
+        return lst[:index], lst[index + 1 :]
+    except ValueError:
+        return lst, []
+
+
+def add_parser(subparser, **kwargs):
+    if kwargs.get("add_help") is False:
+        # Don't add help if explicitly disabled
+        add_help = False
+    else:
+        # Never add help with the built in add_help
+        kwargs["add_help"] = False
+        add_help = True
+
+    kwargs["epilog"] = DISCLAIMER
+    kwargs["exit_on_error"] = False
+    parser = subparser.add_parser(**kwargs)
+
+    if add_help:
+        parser.add_argument(
+            "-h", "--help", help="show this help message and exit", action="store_true"
+        )
+
+    # Setting the add_help after the parser has been created with add_parser has no effect,
+    # but it allows us to look up if this parser has a help message available
+    parser.add_help = add_help
+
+    return parser
+
+
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
         fail(
             f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`."
         )
 
-    parser = argparse.ArgumentParser(description=__doc__, epilog=DISCLAIMER)
+    parser = argparse.ArgumentParser(
+        description=__doc__, epilog=DISCLAIMER, allow_abbrev=False
+    )
 
     parser.add_argument("--version", action="version", version=__version__)
 
-    subparsers = parser.add_subparsers(title="commands", dest="subcommand", metavar="")
-
-    subparsers.add_parser(
-        name="install",
-        epilog=DISCLAIMER,
-        help="install jailmaker dependencies and create symlink",
+    subparsers = parser.add_subparsers(
+        title="commands", dest="command", metavar="", parser_class=CustomSubParser
     )
 
-    subparsers.add_parser(name="create", epilog=DISCLAIMER, help="create a new jail")
+    split_commands = ["create", "exec"]
+    commands = {}
 
-    subparsers.add_parser(
-        name="start", epilog=DISCLAIMER, help="start a previously created jail"
-    ).add_argument("name", help="name of the jail")
+    for d in [
+        dict(
+            name="create",  #
+            help="create a new jail",
+        ),
+        dict(
+            name="edit",
+            help=f"edit jail config with {TEXT_EDITOR} text editor",
+        ),
+        dict(
+            name="exec",
+            help="execute a command in the jail",
+        ),
+        dict(
+            name="images",
+            help="list available images to create jails from",
+        ),
+        dict(
+            name="install",
+            help="install jailmaker dependencies and create symlink",
+        ),
+        dict(
+            name="list",  #
+            help="list jails",
+        ),
+        dict(
+            name="log",  #
+            help="show jail log",
+        ),
+        dict(
+            name="remove",
+            help="remove previously created jail",
+        ),
+        dict(
+            name="restart",  #
+            help="restart a running jail",
+        ),
+        dict(
+            name="shell",
+            help="open shell in running jail (alias for machinectl shell)",
+            add_help=False,
+        ),
+        dict(
+            name="start",
+            help="start previously created jail",
+        ),
+        dict(
+            name="startup",
+            help=f"install {SYMLINK_NAME} and startup selected jails",
+        ),
+        dict(
+            name="status",  #
+            help="show jail status",
+        ),
+        dict(
+            name="stop",  #
+            help="stop a running jail",
+        ),
+    ]:
+        commands[d["name"]] = add_parser(subparsers, **d)
 
-    subparsers.add_parser(
-        name="restart", epilog=DISCLAIMER, help="restart a running jail"
-    ).add_argument("name", help="name of the jail")
+    # Install parser
+    commands["install"].set_defaults(func=install_jailmaker)
 
-    subparsers.add_parser(
-        name="shell",
-        epilog=DISCLAIMER,
-        help="open shell in running jail (alias for machinectl shell)",
+    # Create parser
+    commands["create"].add_argument("jail_name", nargs="?", help="name of the jail")
+    commands["create"].add_argument("--distro")
+    commands["create"].add_argument("--release")
+    commands["create"].add_argument(
+        "--startup",
+        type=int,
+        choices=[0, 1],
+        help=f"start this jail when running: {SCRIPT_NAME} startup",
     )
-
-    exec_parser = subparsers.add_parser(
-        name="exec", epilog=DISCLAIMER, help="execute a command in the jail"
+    commands["create"].add_argument("--docker_compatible", type=int, choices=[0, 1])
+    commands["create"].add_argument(
+        "-c", "--config", help="path to config file template"
     )
-    exec_parser.add_argument("name", help="name of the jail")
-    exec_parser.add_argument("cmd", help="command to execute")
-
-    subparsers.add_parser(
-        name="status", epilog=DISCLAIMER, help="show jail status"
-    ).add_argument("name", help="name of the jail")
-
-    subparsers.add_parser(
-        name="log", epilog=DISCLAIMER, help="show jail log"
-    ).add_argument("name", help="name of the jail")
-
-    subparsers.add_parser(
-        name="stop", epilog=DISCLAIMER, help="stop a running jail"
-    ).add_argument("name", help="name of the jail")
-
-    subparsers.add_parser(
-        name="edit",
-        epilog=DISCLAIMER,
-        help=f"edit jail config with {TEXT_EDITOR} text editor",
-    ).add_argument("name", help="name of the jail to edit")
-
-    subparsers.add_parser(
-        name="remove", epilog=DISCLAIMER, help="remove a previously created jail"
-    ).add_argument("name", help="name of the jail to remove")
-
-    subparsers.add_parser(name="list", epilog=DISCLAIMER, help="list jails")
-
-    subparsers.add_parser(
-        name="images",
-        epilog=DISCLAIMER,
-        help="list available images to create jails from",
+    commands["create"].add_argument(
+        "-gi", "--gpu_passthrough_intel", type=int, choices=[0, 1]
     )
-
-    subparsers.add_parser(
-        name="startup",
-        epilog=DISCLAIMER,
-        help=f"install {SYMLINK_NAME} and startup selected jails",
+    commands["create"].add_argument(
+        "-gn", "--gpu_passthrough_nvidia", type=int, choices=[0, 1]
     )
+    commands["create"].add_argument(
+        "systemd_nspawn_user_args",
+        nargs="*",
+        help="add additional systemd-nspawn flags",
+    )
+    commands["create"].set_defaults(func=create_jail)
+
+    # Start parser
+    commands["start"].add_argument("jail_name", help="name of the jail")
+    commands["start"].set_defaults(func=start_jail)
+
+    # Restart parser
+    commands["restart"].add_argument("jail_name", help="name of the jail")
+    commands["restart"].set_defaults(func=restart_jail)
+
+    # Shell parser
+    commands["shell"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to machinectl shell",
+    )
+    commands["shell"].set_defaults(func=shell_jail)
+
+    # Exec parser
+    commands["exec"].add_argument("jail_name", help="name of the jail")
+    commands["exec"].add_argument(
+        "cmd",
+        nargs="*",
+        help="command to execute",
+    )
+    commands["exec"].set_defaults(func=exec_jail)
+
+    # Status parser
+    commands["status"].add_argument("jail_name", help="name of the jail")
+    commands["status"].set_defaults(func=status_jail)
+
+    # Log parser
+    commands["log"].add_argument("jail_name", help="name of the jail")
+    commands["log"].set_defaults(func=log_jail)
+
+    # Stop parser
+    commands["stop"].add_argument("jail_name", help="name of the jail")
+    commands["stop"].set_defaults(func=stop_jail)
+
+    # Edit parser
+    commands["edit"].add_argument("jail_name", help="name of the jail to edit")
+    commands["edit"].set_defaults(func=edit_jail)
+
+    # Remove parser
+    commands["remove"].add_argument("jail_name", help="name of the jail to remove")
+    commands["remove"].set_defaults(func=remove_jail)
+
+    # List parser
+    commands["list"].set_defaults(func=list_jails)
+
+    # Images parser
+    commands["images"].set_defaults(func=run_lxc_download_script)
+
+    # Startup parser
+    commands["startup"].set_defaults(func=startup_jails)
 
     if os.getuid() != 0:
-        parser.print_usage()
+        parser.print_help()
         fail("Run this script as root...")
 
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
@@ -1814,56 +1983,82 @@ def main():
     # Work relative to this script
     os.chdir(SCRIPT_DIR_PATH)
 
-    args, additional_args = parser.parse_known_args()
+    # Ignore all args after the first "--"
+    args_to_parse = split_at_string(sys.argv[1:], "--")[0]
+    # Check for help
+    if any(item in args_to_parse for item in ["-h", "--help"]):
+        # Likely we need to show help output...
+        try:
+            args = vars(parser.parse_known_args(args_to_parse)[0])
+            # We've exited by now if not invoking a subparser: jlmkr.py --help
+            if args.get("help"):
+                need_help = True
+                command = args.get("command")
 
-    if args.subcommand == "install":
-        sys.exit(install_jailmaker())
+                # Edge case for some commands
+                if command in split_commands and args["jail_name"]:
+                    # Ignore all args after the jail name
+                    args_to_parse = split_at_string(args_to_parse, args["jail_name"])[0]
+                    # Add back the jail_name as it may be a required positional and we
+                    # don't want to end up in the except clause below
+                    args_to_parse += [args["jail_name"]]
+                    # Parse one more time...
+                    args = vars(parser.parse_known_args(args_to_parse)[0])
+                    # ...and check if help is still in the remaining args
+                    need_help = args.get("help")
+                    print(need_help)
 
-    elif args.subcommand == "create":
-        sys.exit(create_jail_interactive())
+                if need_help:
+                    commands[command].print_help()
+                    sys.exit()
+        except ExceptionWithParser as e:
+            # Print help output on error, e.g. due to:
+            # "error: the following arguments are required"
+            if e.parser.add_help:
+                e.parser.print_help()
+                sys.exit()
 
-    elif args.subcommand == "start":
-        sys.exit(start_jail(args.name))
+    # Exit on parse errors (e.g. missing positional args)
+    for command in commands:
+        commands[command].exit_on_error = True
 
-    elif args.subcommand == "restart":
-        sys.exit(restart_jail(args.name))
+    # Parse to find command and function and ignore unknown args which may be present
+    # such as args intended to pass through to systemd-run
+    args = vars(parser.parse_known_args()[0])
+    command = args.pop("command", None)
 
-    elif args.subcommand == "shell":
-        sys.exit(shell_jail(additional_args))
+    # Start over with original args
+    args_to_parse = sys.argv[1:]
 
-    elif args.subcommand == "exec":
-        sys.exit(exec_jail(args.name, args.cmd, additional_args))
+    if not command:
+        # Parse args and show error for unknown args
+        parser.parse_args(args_to_parse)
 
-    elif args.subcommand == "status":
-        sys.exit(status_jail(args.name))
-
-    elif args.subcommand == "log":
-        sys.exit(log_jail(args.name))
-
-    elif args.subcommand == "stop":
-        sys.exit(stop_jail(args.name))
-
-    elif args.subcommand == "edit":
-        sys.exit(edit_jail(args.name))
-
-    elif args.subcommand == "remove":
-        sys.exit(remove_jail(args.name))
-
-    elif args.subcommand == "list":
-        sys.exit(list_jails())
-
-    elif args.subcommand == "images":
-        sys.exit(run_lxc_download_script())
-
-    elif args.subcommand == "startup":
-        sys.exit(startup_jails())
-
-    else:
         if agree("Create a new jail?", "y"):
             print()
-            sys.exit(create_jail_interactive())
+            sys.exit(create_jail())
         else:
-            parser.print_usage()
+            parser.print_help()
+            sys.exit()
+
+    elif command == "shell":
+        # Pass anything after the "shell" command to machinectl
+        _, shell_args = split_at_string(args_to_parse, command)
+        sys.exit(args["func"](shell_args))
+    elif command in split_commands and args["jail_name"]:
+        jlmkr_args, remaining_args = split_at_string(args_to_parse, args["jail_name"])
+        if remaining_args and remaining_args[0] != "--":
+            # Add "--" after the jail name to ensure further args, e.g.
+            # --help or --version, are captured as systemd_nspawn_user_args
+            args_to_parse = jlmkr_args + [args["jail_name"], "--"] + remaining_args
+
+    # Parse args again, but show error for unknown args
+    args = vars(parser.parse_args(args_to_parse))
+    # Clean the args
+    args.pop("help")
+    args.pop("command", None)
+    func = args.pop("func")
+    sys.exit(func(**args))
 
 
 if __name__ == "__main__":
