@@ -1502,7 +1502,10 @@ def print_table(header, list_of_objects, empty_value_indicator):
     widths = defaultdict(int)
     for obj in list_of_objects:
         for hdr in header:
-            widths[hdr] = max(widths[hdr], len(str(obj.get(hdr))), len(str(hdr)))
+            value = obj.get(hdr)
+            if value is None:
+                obj[hdr] = value = empty_value_indicator
+            widths[hdr] = max(widths[hdr], len(str(value)), len(str(hdr)))
 
     # Print header
     print(
@@ -1511,12 +1514,7 @@ def print_table(header, list_of_objects, empty_value_indicator):
 
     # Print rows
     for obj in list_of_objects:
-        print(
-            " ".join(
-                str(obj.get(hdr, empty_value_indicator)).ljust(widths[hdr])
-                for hdr in header
-            )
-        )
+        print(" ".join(str(obj.get(hdr)).ljust(widths[hdr]) for hdr in header))
 
 
 def run_command_and_parse_json(command):
@@ -1544,6 +1542,7 @@ def parse_os_release(candidates):
     for candidate in candidates:
         try:
             with open(candidate, encoding="utf-8") as f:
+                # TODO: can I create a solution which not depends on the internal _parse_os_release method?
                 return platform._parse_os_release(f)
         except OSError:
             # Silently ignore failing to read os release info
@@ -1597,8 +1596,8 @@ def list_jails():
             machine = running_machines[jail_name]
             # Augment the jails dict with output from machinectl
             jail["running"] = True
-            jail["os"] = machine["os"]
-            jail["version"] = machine["version"]
+            jail["os"] = machine["os"] or None
+            jail["version"] = machine["version"] or None
 
             addresses = machine.get("addresses")
             if not addresses:
@@ -1618,7 +1617,9 @@ def list_jails():
             )
 
             jail["os"] = jail_platform.get("ID")
-            jail["version"] = jail_platform.get("VERSION_ID")
+            jail["version"] = jail_platform.get("VERSION_ID") or jail_platform.get(
+                "VERSION_CODENAME"
+            )
 
     print_table(
         [
