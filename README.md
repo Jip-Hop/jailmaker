@@ -51,6 +51,12 @@ You may also specify a path to a config template, for a quick and consistent jai
 jlmkr create --config /path/to/config/template myjail
 ```
 
+Or you can override the default config by using flags. See `jlmkr create --help` for the available options. Anything passed after the jail name will be passed to `systemd-nspawn` when starting the jail. See the `systemd-nspawn` manual for available options, specifically [Mount Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Mount_Options) and [Networking Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Networking_Options) are frequently used.
+
+```shell
+jlmkr create --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
+```
+
 If you omit the jail name, the create process is interactive. You'll be presented with questions which guide you through the process.
 
 ```shell
@@ -151,7 +157,7 @@ See [Advanced Networking](./NETWORKING.md) for more.
 
 ## Docker
 
-The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
+The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com). Additionally you may use the [docker config template](./templates/docker/README.md).
 
 ## Documentation
 
