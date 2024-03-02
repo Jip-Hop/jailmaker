@@ -187,6 +187,7 @@ class KeyValueParser(configparser.ConfigParser):
 
         return cosmetic_newline_indices
 
+    # TODO: can I create a solution which not depends on the internal _read method?
     def _read(self, fp, fpname):
         lines = fp.readlines()
         cosmetic_newline_indices = self._find_cosmetic_newlines("".join(lines))
@@ -1795,7 +1796,9 @@ def add_parser(subparser, **kwargs):
 
     kwargs["epilog"] = DISCLAIMER
     kwargs["exit_on_error"] = False
+    func = kwargs.pop("func")
     parser = subparser.add_parser(**kwargs)
+    parser.set_defaults(func=func)
 
     if add_help:
         parser.add_argument(
@@ -1832,68 +1835,97 @@ def main():
         dict(
             name="create",  #
             help="create a new jail",
+            func=create_jail,
         ),
         dict(
             name="edit",
             help=f"edit jail config with {TEXT_EDITOR} text editor",
+            func=edit_jail,
         ),
         dict(
-            name="exec",
+            name="exec",  #
             help="execute a command in the jail",
+            func=exec_jail,
         ),
         dict(
             name="images",
             help="list available images to create jails from",
+            func=run_lxc_download_script,
         ),
         dict(
             name="install",
             help="install jailmaker dependencies and create symlink",
+            func=install_jailmaker,
         ),
         dict(
             name="list",  #
             help="list jails",
+            func=list_jails,
         ),
         dict(
             name="log",  #
             help="show jail log",
+            func=log_jail,
         ),
         dict(
-            name="remove",
+            name="remove",  #
             help="remove previously created jail",
+            func=remove_jail,
         ),
         dict(
             name="restart",  #
             help="restart a running jail",
+            func=restart_jail,
         ),
         dict(
             name="shell",
             help="open shell in running jail (alias for machinectl shell)",
+            func=shell_jail,
             add_help=False,
         ),
         dict(
-            name="start",
+            name="start",  #
             help="start previously created jail",
+            func=start_jail,
         ),
         dict(
             name="startup",
             help=f"install {SYMLINK_NAME} and startup selected jails",
+            func=startup_jails,
         ),
         dict(
             name="status",  #
             help="show jail status",
+            func=status_jail,
         ),
         dict(
             name="stop",  #
             help="stop a running jail",
+            func=stop_jail,
         ),
     ]:
         commands[d["name"]] = add_parser(subparsers, **d)
 
-    # Install parser
-    commands["install"].set_defaults(func=install_jailmaker)
+    for cmd in ["edit", "exec", "log", "remove", "restart", "start", "status", "stop"]:
+        commands[cmd].add_argument("jail_name", help="name of the jail")
 
-    # Create parser
-    commands["create"].add_argument("jail_name", nargs="?", help="name of the jail")
+    commands["exec"].add_argument(
+        "cmd",
+        nargs="*",
+        help="command to execute",
+    )
+
+    commands["shell"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to machinectl shell",
+    )
+
+    commands["create"].add_argument(
+        "jail_name",  #
+        nargs="?",
+        help="name of the jail",
+    )
     commands["create"].add_argument("--distro")
     commands["create"].add_argument("--release")
     commands["create"].add_argument(
@@ -1902,76 +1934,33 @@ def main():
         choices=[0, 1],
         help=f"start this jail when running: {SCRIPT_NAME} startup",
     )
-    commands["create"].add_argument("--docker_compatible", type=int, choices=[0, 1])
     commands["create"].add_argument(
-        "-c", "--config", help="path to config file template"
+        "--docker_compatible",  #
+        type=int,
+        choices=[0, 1],
     )
     commands["create"].add_argument(
-        "-gi", "--gpu_passthrough_intel", type=int, choices=[0, 1]
+        "-c",  #
+        "--config",
+        help="path to config file template",
     )
     commands["create"].add_argument(
-        "-gn", "--gpu_passthrough_nvidia", type=int, choices=[0, 1]
+        "-gi",  #
+        "--gpu_passthrough_intel",
+        type=int,
+        choices=[0, 1],
+    )
+    commands["create"].add_argument(
+        "-gn",  #
+        "--gpu_passthrough_nvidia",
+        type=int,
+        choices=[0, 1],
     )
     commands["create"].add_argument(
         "systemd_nspawn_user_args",
         nargs="*",
         help="add additional systemd-nspawn flags",
     )
-    commands["create"].set_defaults(func=create_jail)
-
-    # Start parser
-    commands["start"].add_argument("jail_name", help="name of the jail")
-    commands["start"].set_defaults(func=start_jail)
-
-    # Restart parser
-    commands["restart"].add_argument("jail_name", help="name of the jail")
-    commands["restart"].set_defaults(func=restart_jail)
-
-    # Shell parser
-    commands["shell"].add_argument(
-        "args",
-        nargs="*",
-        help="args to pass to machinectl shell",
-    )
-    commands["shell"].set_defaults(func=shell_jail)
-
-    # Exec parser
-    commands["exec"].add_argument("jail_name", help="name of the jail")
-    commands["exec"].add_argument(
-        "cmd",
-        nargs="*",
-        help="command to execute",
-    )
-    commands["exec"].set_defaults(func=exec_jail)
-
-    # Status parser
-    commands["status"].add_argument("jail_name", help="name of the jail")
-    commands["status"].set_defaults(func=status_jail)
-
-    # Log parser
-    commands["log"].add_argument("jail_name", help="name of the jail")
-    commands["log"].set_defaults(func=log_jail)
-
-    # Stop parser
-    commands["stop"].add_argument("jail_name", help="name of the jail")
-    commands["stop"].set_defaults(func=stop_jail)
-
-    # Edit parser
-    commands["edit"].add_argument("jail_name", help="name of the jail to edit")
-    commands["edit"].set_defaults(func=edit_jail)
-
-    # Remove parser
-    commands["remove"].add_argument("jail_name", help="name of the jail to remove")
-    commands["remove"].set_defaults(func=remove_jail)
-
-    # List parser
-    commands["list"].set_defaults(func=list_jails)
-
-    # Images parser
-    commands["images"].set_defaults(func=run_lxc_download_script)
-
-    # Startup parser
-    commands["startup"].set_defaults(func=startup_jails)
 
     if os.getuid() != 0:
         parser.print_help()
