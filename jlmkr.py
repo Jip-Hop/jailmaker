@@ -363,7 +363,7 @@ def passthrough_nvidia(
                 ]
             )
         )
-    except:
+    except Exception:
         eprint(
             dedent(
                 """
@@ -755,8 +755,15 @@ def cleanup(jail_path):
     Cleanup after aborted jail creation.
     """
     if os.path.isdir(jail_path):
+        # Workaround for https://github.com/python/cpython/issues/73885
+        # Should be fixed in Python 3.13 https://stackoverflow.com/a/70549000
+        def _onerror(func, path, exc_info):
+            exc_type, exc_value, exc_traceback = exc_info
+            if not issubclass(exc_type, FileNotFoundError):
+                raise exc_value
+
         eprint(f"Cleaning up: {jail_path}.")
-        shutil.rmtree(jail_path)
+        shutil.rmtree(jail_path, onerror=_onerror)
 
 
 def input_with_default(prompt, default):
