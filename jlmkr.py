@@ -303,7 +303,7 @@ def get_jail_rootfs_path(jail_name):
 
 
 def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
-    if gpu_passthrough_intel != "1":
+    if not gpu_passthrough_intel:
         return
 
     if not os.path.exists("/dev/dri"):
@@ -327,7 +327,7 @@ def passthrough_nvidia(
         os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
     )
 
-    if gpu_passthrough_nvidia != "1":
+    if not gpu_passthrough_nvidia:
         # Cleanup the config file we made when passthrough was enabled
         ld_so_conf_path.unlink(missing_ok=True)
         return
