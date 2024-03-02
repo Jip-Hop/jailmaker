@@ -10,16 +10,19 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 
 TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This script helps with the following:
 
-- Installing the systemd-container package (which includes systemd-nspawn)
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Optional: configuring the jail so you can run Docker inside it
 - Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
 - Starting the jail with your config applied
 
+## Security
+
+Despite what the word 'jail' implies, jailmaker's intended use case is to create one or more additional filesystems to run alongside SCALE with minimal isolation. By default the root user in the jail with uid 0 is mapped to the host's uid 0. This has [obvious security implications](https://linuxcontainers.org/lxc/security/#privileged-containers). If this is not acceptable to you, you may lock down the jails by [limiting capabilities](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Security_Options) and/or using [user namespacing](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#User_Namespacing_Options) or use a VM instead.
+
 ## Installation
 
-Create a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
+[Installation steps with screenshots](https://www.truenas.com/docs/scale/scaletutorials/apps/sandboxes/) are provided on the TrueNAS website. Start by creating a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
 
 ```shell
 cd /mnt/mypool/jailmaker
@@ -28,34 +31,49 @@ chmod +x jlmkr.py
 ./jlmkr.py install
 ```
 
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. Additionally a symlink has been created so you can call `jlmkr` from anywhere.
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. A symlink has been created so you can call `jlmkr` from anywhere (unless the boot pool is readonly, which is the default since SCALE 24.04). Additionally shell aliases have been setup, so you can still call `jlmkr` in an interactive shell (even if the symlink couldn't be created).
 
-After an update of TrueNAS SCALE the symlink will be lost and `systemd-nspawn` (the core package which makes `jailmaker` work) may be gone too. Not to worry, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
+After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases will remain). To restore the symlink, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
 
 ## Usage
 
 ### Create Jail
 
-Creating a jail is interactive. You'll be presented with questions which guide you through the process.
+Creating jail with the default settings is as simple as:
 
 ```shell
 jlmkr create myjail
 ```
 
-After answering a few questions you should have your first jail up and running!
+You may also specify a path to a config template, for a quick and consistent jail creation process.
+
+```shell
+jlmkr create --config /path/to/config/template myjail
+```
+
+Or you can override the default config by using flags. See `jlmkr create --help` for the available options. Anything passed after the jail name will be passed to `systemd-nspawn` when starting the jail. See the `systemd-nspawn` manual for available options, specifically [Mount Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Mount_Options) and [Networking Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Networking_Options) are frequently used.
+
+```shell
+jlmkr create --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
+```
+
+If you omit the jail name, the create process is interactive. You'll be presented with questions which guide you through the process.
+
+```shell
+jlmkr create
+```
+
+After answering some questions you should have your first jail up and running!
 
 ### Startup Jails on Boot
 
 ```shell
-# Best to call startup directly (not through the jlmkr symlink)
+# Call startup using the absolute path to jlmkr.py
+# The jlmkr shell alias doesn't work in Init/Shutdown Scripts
 /mnt/mypool/jailmaker/jlmkr.py startup
-
-# Can be called from the symlink too...
-# But this may not be available after a TrueNAS SCALE update
-jlmkr startup
 ```
 
-In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This will automatically fix the installation of `systemd-nspawn` and setup the `jlmkr` symlink, as well as start all the jails with `startup=1` in the config file. Running the `startup` command Post Init is recommended to keep `jailmaker` working after a TrueNAS SCALE update.
+In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This creates the `jlmkr` symlink (if possible), as well as start all the jails with `startup=1` in the config file.
 
 ### Start Jail
 
@@ -103,6 +121,12 @@ jlmkr remove myjail
 jlmkr stop myjail
 ```
 
+### Restart Jail
+
+```shell
+jlmkr restart myjail
+```
+
 ### Jail Shell
 
 ```shell
@@ -123,7 +147,7 @@ jlmkr log myjail
 
 ### Additional Commands
 
-Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their capabilities. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
+Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their functions. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
 
 ## Networking
 
@@ -133,15 +157,7 @@ See [Advanced Networking](./NETWORKING.md) for more.
 
 ## Docker
 
-The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com).
-
-## Nvidia GPU
-
-To make passthrough of the nvidia GPU work, you need to schedule a Pre Init command. The reason is that TrueNAS SCALE by default doesn't load the nvidia kernel modules (and `jailmaker` doesn't do that either). [This screenshot](https://user-images.githubusercontent.com/1704047/222915803-d6dd51b0-c4dd-4189-84be-a04d38cca0b3.png) shows what the configuration should look like.
-
-```
-[ ! -f /dev/nvidia-uvm ] && modprobe nvidia-current-uvm && /usr/bin/nvidia-modprobe -c0 -u
-```
+The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com). Additionally you may use the [docker config template](./templates/docker/README.md).
 
 ## Documentation
 
