@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -303,7 +303,7 @@ def get_jail_rootfs_path(jail_name):
 
 
 def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
-    if gpu_passthrough_intel != "1":
+    if not gpu_passthrough_intel:
         return
 
     if not os.path.exists("/dev/dri"):
@@ -327,7 +327,7 @@ def passthrough_nvidia(
         os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
     )
 
-    if gpu_passthrough_nvidia != "1":
+    if not gpu_passthrough_nvidia:
         # Cleanup the config file we made when passthrough was enabled
         ld_so_conf_path.unlink(missing_ok=True)
         return
@@ -1198,6 +1198,7 @@ def create_jail(**kwargs):
         config = KeyValueParser()
 
         if jail_config_path:
+            # TODO: fallback to default values for e.g. distro and release if they are not in the config file
             print(f"Creating jail {jail_name} from config template {jail_config_path}.")
             if jail_config_path not in config.read(jail_config_path):
                 eprint(f"Failed to read config config template {jail_config_path}.")
