@@ -1198,6 +1198,7 @@ def create_jail(**kwargs):
         config = KeyValueParser()
 
         if jail_config_path:
+            # TODO: fallback to default values for e.g. distro and release if they are not in the config file
             print(f"Creating jail {jail_name} from config template {jail_config_path}.")
             if jail_config_path not in config.read(jail_config_path):
                 eprint(f"Failed to read config config template {jail_config_path}.")
