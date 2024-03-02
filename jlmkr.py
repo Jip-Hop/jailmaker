@@ -1192,6 +1192,7 @@ def create_jail(**kwargs):
         if not check_jail_name_available(jail_name):
             return 1
 
+        start_now = kwargs.pop("start", start_now)
         jail_config_path = kwargs.pop("config")
 
         config = KeyValueParser()
@@ -1928,6 +1929,11 @@ def main():
     )
     commands["create"].add_argument("--distro")
     commands["create"].add_argument("--release")
+    commands["create"].add_argument(
+        "--start",  #
+        help="start jail after create",
+        action="store_true",
+    )
     commands["create"].add_argument(
         "--startup",
         type=int,
