@@ -337,11 +337,9 @@ def passthrough_nvidia(
         eprint(
             dedent(
                 """
-            Failed to load nvidia-current-uvm kernel module.
-            Skip passthrough of nvidia GPU."""
+            Failed to load nvidia-current-uvm kernel module."""
             )
         )
-        return
 
     # Run nvidia-smi to initialize the nvidia driver
     # If we can't run nvidia-smi successfully,
