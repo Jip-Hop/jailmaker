@@ -953,37 +953,6 @@ def interactive_config():
     recommended_distro = config.my_get("distro")
     recommended_release = config.my_get("release")
 
-    print(DISCLAIMER)
-
-    if os.path.basename(os.getcwd()) != "jailmaker":
-        eprint(
-            dedent(
-                f"""
-            {COMMAND_NAME} needs to create files.
-            Currently it can not decide if it is safe to create files in:
-            {SCRIPT_DIR_PATH}
-            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
-            )
-        )
-        return 1
-
-    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
-        print(
-            dedent(
-                f"""
-            {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
-
-            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
-            Storing it on the boot-pool means losing all jails when updating TrueNAS.
-            If you continue, jails will be stored under:
-            {SCRIPT_DIR_PATH}
-        """
-            )
-        )
-        if not agree("Do you wish to ignore this warning and continue?", "n"):
-            eprint("Aborting...")
-            return 0
-
     # Create the dir where to store the jails
     os.makedirs(JAILS_DIR_PATH, exist_ok=True)
     stat_chmod(JAILS_DIR_PATH, 0o700)
@@ -1188,6 +1157,34 @@ def interactive_config():
 
 
 def create_jail(**kwargs):
+    print(DISCLAIMER)
+
+    if os.path.basename(os.getcwd()) != "jailmaker":
+        eprint(
+            dedent(
+                f"""
+            {COMMAND_NAME} needs to create files.
+            Currently it can not decide if it is safe to create files in:
+            {SCRIPT_DIR_PATH}
+            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
+            )
+        )
+        return 1
+
+    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
+        print(
+            dedent(
+                f"""
+            {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
+
+            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
+            Storing it on the boot-pool means losing all jails when updating TrueNAS.
+            Jails will be stored under:
+            {SCRIPT_DIR_PATH}
+        """
+            )
+        )
+
     jail_name = kwargs.pop("jail_name", None)
     start_now = False
 
