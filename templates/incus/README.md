@@ -46,32 +46,45 @@ The command above (when ran as root user inside the incus jail) adds a new virti
 ### Benchmarks
 
 #### Inside LXD ubuntu desktop VM with virtiofs mount
+
+```
 root@desktop:/mnt/test# mount | grep test
 incus_test on /mnt/test type virtiofs (rw,relatime)
+
 root@desktop:/mnt/test# time iozone -a
 [...]
 real    2m22.389s
 user    0m2.222s
 sys     0m59.275s
+```
 
 #### In a jailmaker jail on the host:
+
+```
 root@incus:/home/test# time iozone -a
 [...]
 real	0m59.486s
 user	0m1.468s
 sys	0m25.458s
+```
 
 #### Inside LXD ubuntu desktop VM with virtiofs mount
+
+```
 root@desktop:/mnt/test# dd if=/dev/random of=./test1.img bs=1G count=1 oflag=dsync
 1+0 records in
 1+0 records out
 1073741824 bytes (1.1 GB, 1.0 GiB) copied, 36.321 s, 29.6 MB/s
+```
 
 #### In a jailmaker jail on the host:
+
+```
 root@incus:/home/test# dd if=/dev/random of=./test2.img bs=1G count=1 oflag=dsync
 1+0 records in
 1+0 records out
 1073741824 bytes (1.1 GB, 1.0 GiB) copied, 7.03723 s, 153 MB/s
+```
 
 ## Create Ubuntu container
 
