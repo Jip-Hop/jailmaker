@@ -184,8 +184,8 @@ echo "PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[
 ## References
 
 - [TrueNAS Forum Thread about Jailmaker](https://www.truenas.com/community/threads/linux-jails-experimental-script.106926/)
-- [systemd-nspawn](https://manpages.debian.org/bullseye/systemd-container/systemd-nspawn.1.en.html)
-- [machinectl](https://manpages.debian.org/bullseye/systemd-container/machinectl.1.en.html)
-- [systemd-run](https://manpages.debian.org/bullseye/systemd/systemd-run.1.en.html)
+- [systemd-nspawn](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html)
+- [machinectl](https://manpages.debian.org/bookworm/systemd-container/machinectl.1.en.html)
+- [systemd-run](https://manpages.debian.org/bookworm/systemd/systemd-run.1.en.html)
 - [Run docker in systemd-nspawn](https://wiki.archlinux.org/title/systemd-nspawn#Run_docker_in_systemd-nspawn)
 - [The original Jailmaker gist](https://gist.github.com/Jip-Hop/4704ba4aa87c99f342b2846ed7885a5d)
