@@ -750,11 +750,17 @@ def restart_jail(jail_name):
     return start_jail(jail_name)
 
 
-def cleanup(jail_path):
+def cleanup(jail_name):
     """
     Cleanup after aborted jail creation.
     """
-    if os.path.isdir(jail_path):
+    jail_path = get_jail_path(jail_name)
+    if is_zfs_dataset(jail_name):
+        eprint(f"The directory '{jail_path}' is a ZFS dataset. Please manually delete the dataset afterwards.")
+        eprint(f"Cleaning up: {jail_path}.")
+        os.remove(get_jail_config_path(jail_name))
+        shutil.rmtree(get_jail_rootfs_path(jail_name))
+    elif os.path.isdir(jail_path):
         eprint(f"Cleaning up: {jail_path}.")
         shutil.rmtree(jail_path)
 
@@ -910,14 +916,25 @@ def check_jail_name_valid(jail_name, warn=True):
             )
         )
     return False
-
+def is_zfs_dataset(jail_name):
+    """
+    Return True if a directory is a ZFS Dataset
+    """
+    jail_absolute_path = os.path.join(SCRIPT_DIR_PATH, JAILS_DIR_PATH, jail_name)
+    with open('/proc/mounts', 'r') as f:
+        for line in f:
+            fields = line.split()
+            if fields[1] == jail_absolute_path and fields[2] == 'zfs':
+                return True
+    return False
 
 def check_jail_name_available(jail_name, warn=True):
     """
-    Return True if jail name is not yet taken.
+    Return True if jail name is not yet taken. Checks for config file and rootfs directory to account for drectories being ZFS datasets
     """
-    if not os.path.exists(get_jail_path(jail_name)):
-        return True
+    if not os.path.exists(get_jail_config_path(jail_name)):
+        if not os.path.exists(get_jail_rootfs_path(jail_name)):
+            return True
 
     if warn:
         print()
@@ -1393,7 +1410,7 @@ def create_jail(**kwargs):
 
     # Cleanup on any exception and rethrow
     except BaseException as error:
-        cleanup(jail_path)
+        cleanup(jail_name)
         raise error
 
     if start_now:
@@ -1485,13 +1502,12 @@ def remove_jail(jail_name):
 
     if check == jail_name:
         print()
-        jail_path = get_jail_path(jail_name)
         returncode = stop_jail(jail_name)
         if returncode != 0:
             return returncode
 
         print()
-        cleanup(jail_path)
+        cleanup(jail_name)
         return 0
     else:
         eprint("Wrong name, nothing happened.")
@@ -1532,7 +1548,12 @@ def run_command_and_parse_json(command):
 
 def get_all_jail_names():
     try:
-        jail_names = os.listdir(JAILS_DIR_PATH)
+        jail_names = []
+        jail_dirs = os.listdir(JAILS_DIR_PATH)
+        for dir in jail_dirs:
+            jail_config_file = os.path.join(JAILS_DIR_PATH, dir,'config')
+            if os.path.isfile(jail_config_file):
+                jail_names.append(dir)
     except FileNotFoundError:
         jail_names = []
 
