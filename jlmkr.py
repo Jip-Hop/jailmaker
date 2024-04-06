@@ -951,10 +951,6 @@ def interactive_config():
     recommended_distro = config.my_get("distro")
     recommended_release = config.my_get("release")
 
-    # Create the dir where to store the jails
-    os.makedirs(JAILS_DIR_PATH, exist_ok=True)
-    stat_chmod(JAILS_DIR_PATH, 0o700)
-
     #################
     # Config handling
     #################
@@ -1249,6 +1245,10 @@ def create_jail(**kwargs):
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
+        # Create the dir where to store the jails
+        os.makedirs(JAILS_DIR_PATH, exist_ok=True)
+        stat_chmod(JAILS_DIR_PATH, 0o700)
+        
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
