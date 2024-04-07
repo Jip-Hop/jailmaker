@@ -750,7 +750,7 @@ def restart_jail(jail_name):
 
 def cleanup(jail_path):
     """
-    Cleanup after aborted jail creation.
+    Cleanup jail.
     """
     if os.path.isdir(jail_path):
         # Workaround for https://github.com/python/cpython/issues/73885
@@ -1248,7 +1248,7 @@ def create_jail(**kwargs):
         # Create the dir where to store the jails
         os.makedirs(JAILS_DIR_PATH, exist_ok=True)
         stat_chmod(JAILS_DIR_PATH, 0o700)
-        
+
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
