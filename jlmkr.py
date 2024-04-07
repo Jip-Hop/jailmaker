@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -113,7 +113,7 @@ JAILS_DIR_PATH = "jails"
 JAIL_CONFIG_NAME = "config"
 JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
-    "6cca2eda73c7358c232fecb4e750b3bf0afa9636efb5de6a9517b7df78be12a4"
+    "d11fc7e5950d0e01bbca89ad8f663a698880ef7f4b0473453ba46a693cec4d12"
 )
 SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
@@ -337,11 +337,9 @@ def passthrough_nvidia(
         eprint(
             dedent(
                 """
-            Failed to load nvidia-current-uvm kernel module.
-            Skip passthrough of nvidia GPU."""
+            Failed to load nvidia-current-uvm kernel module."""
             )
         )
-        return
 
     # Run nvidia-smi to initialize the nvidia driver
     # If we can't run nvidia-smi successfully,
@@ -363,7 +361,7 @@ def passthrough_nvidia(
                 ]
             )
         )
-    except:
+    except Exception:
         eprint(
             dedent(
                 """
@@ -752,11 +750,18 @@ def restart_jail(jail_name):
 
 def cleanup(jail_path):
     """
-    Cleanup after aborted jail creation.
+    Cleanup jail.
     """
     if os.path.isdir(jail_path):
+        # Workaround for https://github.com/python/cpython/issues/73885
+        # Should be fixed in Python 3.13 https://stackoverflow.com/a/70549000
+        def _onerror(func, path, exc_info):
+            exc_type, exc_value, exc_traceback = exc_info
+            if not issubclass(exc_type, FileNotFoundError):
+                raise exc_value
+
         eprint(f"Cleaning up: {jail_path}.")
-        shutil.rmtree(jail_path)
+        shutil.rmtree(jail_path, onerror=_onerror)
 
 
 def input_with_default(prompt, default):
@@ -782,6 +787,22 @@ def validate_sha256(file_path, digest):
         return False
 
 
+def remove_lines_after_line_number(file_path, line_number):
+    with open(file_path, "r+") as file:
+        current_line_number = 1
+
+        # Read the last line to keep
+        while current_line_number <= line_number:
+            file.readline()
+            current_line_number += 1
+
+        # Seek to the last line to keep
+        # https://stackoverflow.com/a/78176770
+        file.seek(file.tell())
+        # Remove everything after line_number
+        file.truncate()
+
+
 def run_lxc_download_script(
     jail_name=None, jail_path=None, jail_rootfs_path=None, distro=None, release=None
 ):
@@ -805,9 +826,13 @@ def run_lxc_download_script(
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
         urllib.request.urlretrieve(
-            "https://raw.githubusercontent.com/Jip-Hop/lxc/58520263041b6864cadad96278848f9b8ce78ee9/templates/lxc-download.in",
+            "https://raw.githubusercontent.com/Jip-Hop/lxc/97f93be72ebf380f3966259410b70b1c966b0ff0/templates/lxc-download.in",
             lxc_download_script,
         )
+
+        # Throw away the last part of the download script, jailmaker doesn't need it
+        remove_lines_after_line_number(lxc_download_script, 404)
+
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
             eprint("Abort! Downloaded script has unexpected contents.")
             return 1
@@ -945,41 +970,6 @@ def interactive_config():
 
     recommended_distro = config.my_get("distro")
     recommended_release = config.my_get("release")
-
-    print(DISCLAIMER)
-
-    if os.path.basename(os.getcwd()) != "jailmaker":
-        eprint(
-            dedent(
-                f"""
-            {COMMAND_NAME} needs to create files.
-            Currently it can not decide if it is safe to create files in:
-            {SCRIPT_DIR_PATH}
-            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
-            )
-        )
-        return 1
-
-    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
-        print(
-            dedent(
-                f"""
-            {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
-
-            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
-            Storing it on the boot-pool means losing all jails when updating TrueNAS.
-            If you continue, jails will be stored under:
-            {SCRIPT_DIR_PATH}
-        """
-            )
-        )
-        if not agree("Do you wish to ignore this warning and continue?", "n"):
-            eprint("Aborting...")
-            return 0
-
-    # Create the dir where to store the jails
-    os.makedirs(JAILS_DIR_PATH, exist_ok=True)
-    stat_chmod(JAILS_DIR_PATH, 0o700)
 
     #################
     # Config handling
@@ -1181,6 +1171,34 @@ def interactive_config():
 
 
 def create_jail(**kwargs):
+    print(DISCLAIMER)
+
+    if os.path.basename(os.getcwd()) != "jailmaker":
+        eprint(
+            dedent(
+                f"""
+            {COMMAND_NAME} needs to create files.
+            Currently it can not decide if it is safe to create files in:
+            {SCRIPT_DIR_PATH}
+            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
+            )
+        )
+        return 1
+
+    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
+        print(
+            dedent(
+                f"""
+            {YELLOW}{BOLD}WARNING: BEWARE OF DATA LOSS{NORMAL}
+
+            {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
+            Storing it on the boot-pool means losing all jails when updating TrueNAS.
+            Jails will be stored under:
+            {SCRIPT_DIR_PATH}
+        """
+            )
+        )
+
     jail_name = kwargs.pop("jail_name", None)
     start_now = False
 
@@ -1247,6 +1265,10 @@ def create_jail(**kwargs):
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
+        # Create the dir where to store the jails
+        os.makedirs(JAILS_DIR_PATH, exist_ok=True)
+        stat_chmod(JAILS_DIR_PATH, 0o700)
+
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
 
