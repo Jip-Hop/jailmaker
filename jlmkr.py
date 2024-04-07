@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -113,7 +113,7 @@ JAILS_DIR_PATH = "jails"
 JAIL_CONFIG_NAME = "config"
 JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
-    "d11fc7e5950d0e01bbca89ad8f663a698880ef7f4b0473453ba46a693cec4d12"
+    "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
 SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
@@ -787,22 +787,6 @@ def validate_sha256(file_path, digest):
         return False
 
 
-def remove_lines_after_line_number(file_path, line_number):
-    with open(file_path, "r+") as file:
-        current_line_number = 1
-
-        # Read the last line to keep
-        while current_line_number <= line_number:
-            file.readline()
-            current_line_number += 1
-
-        # Seek to the last line to keep
-        # https://stackoverflow.com/a/78176770
-        file.seek(file.tell())
-        # Remove everything after line_number
-        file.truncate()
-
-
 def run_lxc_download_script(
     jail_name=None, jail_path=None, jail_rootfs_path=None, distro=None, release=None
 ):
@@ -829,9 +813,6 @@ def run_lxc_download_script(
             "https://raw.githubusercontent.com/Jip-Hop/lxc/97f93be72ebf380f3966259410b70b1c966b0ff0/templates/lxc-download.in",
             lxc_download_script,
         )
-
-        # Throw away the last part of the download script, jailmaker doesn't need it
-        remove_lines_after_line_number(lxc_download_script, 404)
 
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
             eprint("Abort! Downloaded script has unexpected contents.")
