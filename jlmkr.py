@@ -787,22 +787,6 @@ def validate_sha256(file_path, digest):
         return False
 
 
-def remove_lines_after_line_number(file_path, line_number):
-    with open(file_path, "r+") as file:
-        current_line_number = 1
-
-        # Read the last line to keep
-        while current_line_number <= line_number:
-            file.readline()
-            current_line_number += 1
-
-        # Seek to the last line to keep
-        # https://stackoverflow.com/a/78176770
-        file.seek(file.tell())
-        # Remove everything after line_number
-        file.truncate()
-
-
 def run_lxc_download_script(
     jail_name=None, jail_path=None, jail_rootfs_path=None, distro=None, release=None
 ):
