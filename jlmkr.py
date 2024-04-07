@@ -113,7 +113,7 @@ JAILS_DIR_PATH = "jails"
 JAIL_CONFIG_NAME = "config"
 JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
-    "d11fc7e5950d0e01bbca89ad8f663a698880ef7f4b0473453ba46a693cec4d12"
+    "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
 SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
