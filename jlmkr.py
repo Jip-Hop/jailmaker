@@ -830,9 +830,6 @@ def run_lxc_download_script(
             lxc_download_script,
         )
 
-        # Throw away the last part of the download script, jailmaker doesn't need it
-        remove_lines_after_line_number(lxc_download_script, 404)
-
         if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
             eprint("Abort! Downloaded script has unexpected contents.")
             return 1
