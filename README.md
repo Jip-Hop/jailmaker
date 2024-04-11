@@ -12,6 +12,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
+- Will create a ZFS Dataset for each jail if the 'jailmaker' directory is a dataset (easy snapshotting)
 - Optional: configuring the jail so you can run Docker inside it
 - Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
 - Starting the jail with your config applied
@@ -148,6 +149,8 @@ jlmkr log myjail
 ### Additional Commands
 
 Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their functions. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
+
+ZFS Datasets: It is recommended to the 'jailmaker' directory as a ZFS Dataset. This will automatically create a new dataset for every jail created. (Legacy) functionality also works as previously with directories.
 
 ## Networking
 
