@@ -12,7 +12,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
-- Will create a ZFS Dataset for each jail if the 'jailmaker' directory is a dataset (easy snapshotting)
+- Will create a ZFS Dataset for each jail if the `jailmaker` directory is a dataset (easy snapshotting)
 - Optional: configuring the jail so you can run Docker inside it
 - Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
 - Starting the jail with your config applied
@@ -32,7 +32,9 @@ chmod +x jlmkr.py
 ./jlmkr.py install
 ```
 
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. A symlink has been created so you can call `jlmkr` from anywhere (unless the boot pool is readonly, which is the default since SCALE 24.04). Additionally shell aliases have been setup, so you can still call `jlmkr` in an interactive shell (even if the symlink couldn't be created).
+The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. If the automatically created `jails` directory is also a ZFS dataset (which is true for new users), then the `jlmkr.py` script will automatically create a new dataset for every jail created. This allows you to snapshot individual jails. For legacy users (where the `jails` directory is not a dataset) each jail will be stored in a plain directory.
+
+A symlink has been created so you can call `jlmkr` from anywhere (unless the boot pool is readonly, which is the default since SCALE 24.04). Additionally shell aliases have been setup, so you can still call `jlmkr` in an interactive shell (even if the symlink couldn't be created).
 
 After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases will remain). To restore the symlink, just run `./jlmkr.py install` again or use [the `./jlmkr.py startup` command](#startup-jails-on-boot).
 
@@ -149,8 +151,6 @@ jlmkr log myjail
 ### Additional Commands
 
 Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their functions. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
-
-ZFS Datasets: It is recommended to the 'jailmaker' directory as a ZFS Dataset. This will automatically create a new dataset for every jail created. (Legacy) functionality also works as previously with directories.
 
 ## Networking
 
