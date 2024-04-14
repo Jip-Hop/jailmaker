@@ -1300,7 +1300,7 @@ def create_jail(**kwargs):
                 create_zfs_dataset(JAILS_DIR_PATH)
             else:
                 os.makedirs(JAILS_DIR_PATH, exist_ok=True)
-                stat_chmod(JAILS_DIR_PATH, 0o700)
+            stat_chmod(JAILS_DIR_PATH, 0o700)
 
         # Creating a dataset for the jail if the jails dir is a dataset
         if get_zfs_dataset(JAILS_DIR_PATH):
