@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -752,7 +752,11 @@ def cleanup(jail_path):
     """
     Cleanup jail.
     """
-    if os.path.isdir(jail_path):
+    if get_zfs_dataset(jail_path):
+        eprint(f"Cleaning up: {jail_path}.")
+        remove_zfs_dataset(jail_path)
+
+    elif os.path.isdir(jail_path):
         # Workaround for https://github.com/python/cpython/issues/73885
         # Should be fixed in Python 3.13 https://stackoverflow.com/a/70549000
         def _onerror(func, path, exc_info):
@@ -889,6 +893,49 @@ def get_mount_point(path):
     while not os.path.ismount(path):
         path = os.path.dirname(path)
     return path
+
+
+def get_zfs_dataset(path):
+    """
+    Get ZFS dataset path.
+    """
+    path = os.path.realpath(path)
+    with open("/proc/mounts", "r") as f:
+        for line in f:
+            fields = line.split()
+            if fields[1] == path and fields[2] == "zfs":
+                return fields[0]
+
+
+def get_zfs_base_path():
+    """
+    Get ZFS dataset path for jailmaker directory.
+    """
+    zfs_base_path = get_zfs_dataset(SCRIPT_DIR_PATH)
+    if not zfs_base_path:
+        fail("Failed to get dataset path for jailmaker directory.")
+
+    return zfs_base_path
+
+
+def create_zfs_dataset(relative_path):
+    """
+    Create a ZFS Dataset.
+    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail").
+    """
+    dataset_to_create = os.path.join(get_zfs_base_path(), relative_path)
+    eprint(f"Creating ZFS Dataset {dataset_to_create}")
+    subprocess.run(["zfs", "create", dataset_to_create], check=True)
+
+
+def remove_zfs_dataset(relative_path):
+    """
+    Remove a ZFS Dataset.
+    Receives the dataset to be created relative to the jailmaker script (e.g. "jails/oldjail").
+    """
+    dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
+    eprint(f"Removing ZFS Dataset {dataset_to_remove}")
+    subprocess.run(["zfs", "destroy", "-r", dataset_to_remove], check=True)
 
 
 def check_jail_name_valid(jail_name, warn=True):
@@ -1161,7 +1208,7 @@ def create_jail(**kwargs):
             {COMMAND_NAME} needs to create files.
             Currently it can not decide if it is safe to create files in:
             {SCRIPT_DIR_PATH}
-            Please create a dedicated directory called 'jailmaker', store {SCRIPT_NAME} there and try again."""
+            Please create a dedicated dataset called "jailmaker", store {SCRIPT_NAME} there and try again."""
             )
         )
         return 1
@@ -1246,9 +1293,18 @@ def create_jail(**kwargs):
     # Cleanup in except, but only once the jail_path is final
     # Otherwise we may cleanup the wrong directory
     try:
-        # Create the dir where to store the jails
-        os.makedirs(JAILS_DIR_PATH, exist_ok=True)
-        stat_chmod(JAILS_DIR_PATH, 0o700)
+        # Create the dir or dataset where to store the jails
+        if not os.path.exists(JAILS_DIR_PATH):
+            if get_zfs_dataset(SCRIPT_DIR_PATH):
+                # Creating "jails" dataset if "jailmaker" is a ZFS Dataset
+                create_zfs_dataset(JAILS_DIR_PATH)
+            else:
+                os.makedirs(JAILS_DIR_PATH, exist_ok=True)
+            stat_chmod(JAILS_DIR_PATH, 0o700)
+
+        # Creating a dataset for the jail if the jails dir is a dataset
+        if get_zfs_dataset(JAILS_DIR_PATH):
+            create_zfs_dataset(jail_path)
 
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
