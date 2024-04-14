@@ -897,7 +897,7 @@ def get_mount_point(path):
 
 def get_zfs_dataset(path):
     """
-    Get ZFS dataset path
+    Get ZFS dataset path.
     """
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
@@ -909,7 +909,7 @@ def get_zfs_dataset(path):
 
 def get_zfs_base_path():
     """
-    Get ZFS dataset path for jailmaker directory
+    Get ZFS dataset path for jailmaker directory.
     """
     zfs_base_path = get_zfs_dataset(SCRIPT_DIR_PATH)
     if not zfs_base_path:
@@ -920,8 +920,8 @@ def get_zfs_base_path():
 
 def create_zfs_dataset(relative_path):
     """
-    Create a ZFS Dataset
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail")
+    Create a ZFS Dataset.
+    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail").
     """
     dataset_to_create = os.path.join(get_zfs_base_path(), relative_path)
     eprint(f"Creating ZFS Dataset {dataset_to_create}")
@@ -930,8 +930,8 @@ def create_zfs_dataset(relative_path):
 
 def remove_zfs_dataset(relative_path):
     """
-    Remove a ZFS Dataset
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails/oldjail")
+    Remove a ZFS Dataset.
+    Receives the dataset to be created relative to the jailmaker script (e.g. "jails/oldjail").
     """
     dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
     eprint(f"Removing ZFS Dataset {dataset_to_remove}")
