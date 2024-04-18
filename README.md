@@ -11,7 +11,7 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, p
 TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This script helps with the following:
 
 - Setting up the jail so it won't be lost when you update SCALE
-- Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
+- Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux, Rocky Linux or NixOS seem good choices too)
 - Will create a ZFS Dataset for each jail if the `jailmaker` directory is a dataset (easy snapshotting)
 - Optional: configuring the jail so you can run Docker inside it
 - Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
