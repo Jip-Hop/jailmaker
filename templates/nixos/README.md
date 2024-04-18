@@ -10,18 +10,14 @@
 
 ## Procedure
 
+You will need to use `macvlan` or `bridge` interface, otherwise nix won't be able to rebuild. More info on networking [here](../../docs/network.md)
+
+Use `--network-macvlan=eth1` or  `--network-bridge=br1` accordingly below.
+
 Create the jail:
 
 ```bash
-jlmkr create --distro=nixos --release=23.11 nixos-jail
-```
-
-You will need to use `macvlan` or `bridge` interface, otherwise nix won't be able to rebuild. More info on networking [here](../../docs/network.md)
-
-Edit your config to add an interface:
-
-```
-systemd_nspawn_user_args=--network-bridge=br1
+jlmkr create --distro=nixos --release=23.11 nixos-jail --network-bridge=br1
 ```
 
 Start the jail and get a shell:
