@@ -2,6 +2,8 @@
 startup=0
 gpu_passthrough_intel=1
 gpu_passthrough_nvidia=0
+# Turning off seccomp filtering improves performance at the expense of security
+seccomp=1
 
 # Use macvlan networking to provide an isolated network namespace,
 # so incus can manage firewall rules
@@ -9,7 +11,6 @@ gpu_passthrough_nvidia=0
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # TODO: don't use --capability=all but specify only the required capabilities
-# TODO: or add and use privileged flag?
 systemd_nspawn_user_args=--network-macvlan=eno1
     --resolv-conf=bind-host
     --capability=all
@@ -63,8 +64,6 @@ systemd_run_default_args=--property=KillMode=mixed
     --property=TasksMax=infinity
     --collect
     --setenv=SYSTEMD_NSPAWN_LOCK=0
-# TODO: add below if required:
-# --property=DevicePolicy=auto
 
 systemd_nspawn_default_args=--keep-unit
     --quiet

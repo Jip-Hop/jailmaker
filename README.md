@@ -160,7 +160,7 @@ See [Advanced Networking](./NETWORKING.md) for more.
 
 ## Docker
 
-The `jailmaker` script won't install Docker for you, but it can setup the jail with the capabilities required to run docker. You can manually install Docker inside the jail using the [official installation guide](https://docs.docker.com/engine/install/#server) or use [convenience script](https://get.docker.com). Additionally you may use the [docker config template](./templates/docker/README.md).
+Using the [docker config template](./templates/docker/README.md) is recommended if you want to run docker inside the jail. You may of course manually install docker inside a jail. But keep in mind that you need to add `--system-call-filter='add_key keyctl bpf'` (or disable seccomp filtering). It is [not recommended to use host networking for a jail in which you run docker](https://github.com/Jip-Hop/jailmaker/issues/119). Docker needs to manage iptables rules, which it can safely do in its own networking namespace (when using [bridge or macvlan networking](./NETWORKING.md) for the jail).
 
 ## Documentation
 
