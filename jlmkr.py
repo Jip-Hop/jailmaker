@@ -926,7 +926,8 @@ def get_zfs_dataset(path):
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
-            fields = line.split()
+            unclean_fields = line.split()
+            fields = [field.replace("\040"," ") for field in unclean_fields]
             if fields[1] == path and fields[2] == "zfs":
                 return fields[0]
 
