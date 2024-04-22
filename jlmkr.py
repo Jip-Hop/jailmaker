@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.1.4"
+__version__ = "1.1.5"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -38,7 +38,10 @@ from textwrap import dedent
 DEFAULT_CONFIG = """startup=0
 gpu_passthrough_intel=0
 gpu_passthrough_nvidia=0
+# The docker_compatible option is deprecated and will be removed in a future release
 docker_compatible=0
+# Turning off seccomp filtering improves performance at the expense of security
+seccomp=1
 
 # Add additional systemd-nspawn flags
 # E.g. to mount host storage in the jail (--bind-ro for readonly):
@@ -47,7 +50,7 @@ docker_compatible=0
 # --network-macvlan=eno1 --resolv-conf=bind-host
 # E.g. bridge networking:
 # --network-bridge=br1 --resolv-conf=bind-host
-# E.g. add capabilities required by docker:
+# E.g. allow syscalls required by docker:
 # --system-call-filter='add_key keyctl bpf'
 systemd_nspawn_user_args=
 
@@ -135,8 +138,7 @@ else:
 DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
 
 # Used in parser getters to indicate the default behavior when a specific
-# option is not found it to raise an exception. Created to enable `None` as
-# a valid fallback value.
+# option is not found. Created to enable `None` as a valid fallback value.
 _UNSET = object()
 
 
@@ -249,8 +251,8 @@ class KeyValueParser(configparser.ConfigParser):
         super().set(self._section_name, option, value)
 
     # Return value for specified option key
-    def my_get(self, option):
-        return super().get(self._section_name, option)
+    def my_get(self, option, fallback=_UNSET):
+        return super().get(self._section_name, option, fallback=fallback)
 
     # Return value converted to boolean for specified option key
     def my_getboolean(self, option, fallback=_UNSET):
@@ -300,6 +302,12 @@ def get_jail_config_path(jail_name):
 
 def get_jail_rootfs_path(jail_name):
     return os.path.join(get_jail_path(jail_name), JAIL_ROOTFS_NAME)
+
+
+# Test intel GPU by decoding mp4 file (output is discarded)
+# Run the commands below in the jail:
+# curl -o bunny.mp4 https://www.w3schools.com/html/mov_bbb.mp4
+# ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi -i bunny.mp4 -f null - && echo 'SUCCESS!'
 
 
 def passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args):
@@ -536,6 +544,8 @@ def start_jail(jail_name):
         eprint("Aborting...")
         return 1
 
+    seccomp = config.my_getboolean("seccomp")
+
     # Handle initial setup
     initial_setup = config.my_get("initial_setup")
 
@@ -596,19 +606,13 @@ def start_jail(jail_name):
         f"--directory={JAIL_ROOTFS_NAME}",
     ]
 
-    # TODO: split the docker_compatible option into separate options
-    #   - privileged (to disable seccomp, set DevicePolicy=auto and add all capabilities)
-    #   "The bottom line is that using the --privileged flag does not tell the container
-    #   engines to add additional security constraints. The --privileged flag does not add
-    #   any privilege over what the processes launching the containers have."
-    #   "Container engines user namespace is not affected by the --privileged flag"
-    #   Meaning in the context of systemd-nspawn I could have a privileged option,
-    #   which would also apply to jails with --private-users (user namespacing)
-    #   https://www.redhat.com/sysadmin/privileged-flag-container-engines
-    #   - how to call the option to enable ip_forward and bridge-nf-call?
-    #   - add CSV value for preloading kernel modules like linux.kernel_modules in LXC
-
     if config.my_getboolean("docker_compatible"):
+        eprint("WARNING: DEPRECATED OPTION")
+        eprint(
+            "The `docker_compatible` option is deprecated and will be removed in a future release."
+        )
+        eprint("Please refer to the recommended way to run docker in a jail:")
+        eprint("https://github.com/Jip-Hop/jailmaker/tree/main/templates/docker")
         # Enable ip forwarding on the host (docker needs it)
         print(1, file=open("/proc/sys/net/ipv4/ip_forward", "w"))
 
@@ -635,32 +639,8 @@ def start_jail(jail_name):
                 )
             )
 
-        # To properly run docker inside the jail, we need to lift restrictions
-        # Without DevicePolicy=auto images with device nodes may not be pulled
-        # For example docker pull ljishen/sysbench would fail
-        # Fortunately I didn't encounter many images with device nodes...
-        #
-        # Issue: https://github.com/moby/moby/issues/35245
-        #
-        # The systemd-nspawn manual explicitly mentions:
-        # Device nodes may not be created
-        # https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
-        #
-        # Workaround: https://github.com/kinvolk/kube-spawn/pull/328
-        #
-        # As of 26-3-2024 on TrueNAS-SCALE-23.10.1.1 it seems to no longer be
-        # required to use DevicePolicy=auto
-        # Docker can successfully pull the ljishen/sysbench test image
-        # Running mknod /dev/port c 1 4 manually works too...
-        # Unknown why this suddenly started working...
-        # https://github.com/systemd/systemd/issues/21987
-        #
-        # Use SYSTEMD_SECCOMP=0: https://github.com/systemd/systemd/issues/18370
-
-        systemd_run_additional_args += [
-            "--setenv=SYSTEMD_SECCOMP=0",
-            "--property=DevicePolicy=auto",
-        ]
+        print("The `docker_compatible` option disables seccomp filtering...")
+        seccomp = False
 
         # Add additional flags required for docker
         systemd_nspawn_additional_args += [
@@ -683,21 +663,65 @@ def start_jail(jail_name):
     )
 
     # Legacy gpu_passthrough config setting
-    # TODO: deprecate this and stop supporting it
     if config.my_getboolean("gpu_passthrough", False):
+        eprint("WARNING: DEPRECATED OPTION")
+        eprint(
+            "The `gpu_passthrough` option is deprecated and will be removed in a future release."
+        )
+        eprint(
+            "Please use `gpu_passthrough_intel` and/or `gpu_passthrough_nvidia` instead."
+        )
         gpu_passthrough_intel = True
         gpu_passthrough_nvidia = True
     else:
         gpu_passthrough_intel = config.my_getboolean("gpu_passthrough_intel")
         gpu_passthrough_nvidia = config.my_getboolean("gpu_passthrough_nvidia")
 
-    if gpu_passthrough_intel or gpu_passthrough_nvidia:
-        systemd_nspawn_additional_args.append("--property=DeviceAllow=char-drm rw")
-
     passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args)
     passthrough_nvidia(
         gpu_passthrough_nvidia, systemd_nspawn_additional_args, jail_name
     )
+
+    if seccomp is False:
+        # Disabling seccomp filtering by passing --setenv=SYSTEMD_SECCOMP=0 to systemd-run will improve performance
+        # at the expense of security: it allows syscalls which otherwise would be blocked or would have to be explicitly allowed by passing
+        # --system-call-filter to systemd-nspawn
+        # https://github.com/systemd/systemd/issues/18370
+        #
+        # However, and additional layer of seccomp filtering may be undesirable
+        # For example when using docker to run containers inside the jail created with systemd-nspawn
+        # Even though seccomp filtering is disabled for the systemd-nspawn jail itself, docker can still use seccomp filtering
+        # to restrict the actions available within its containers
+        #
+        # Proof that seccomp can be used inside a jail started with --setenv=SYSTEMD_SECCOMP=0:
+        # Run a command in a docker container which is blocked by the default docker seccomp profile:
+        # 	docker run --rm -it debian:jessie unshare --map-root-user --user sh -c whoami
+        # 	unshare: unshare failed: Operation not permitted
+        # Now run unconfined to show command runs successfully:
+        # 	docker run --rm -it --security-opt seccomp=unconfined debian:jessie unshare --map-root-user --user sh -c whoami
+        # 	root
+
+        systemd_run_additional_args += [
+            "--setenv=SYSTEMD_SECCOMP=0",
+        ]
+
+    # The systemd-nspawn manual explicitly mentions:
+    # Device nodes may not be created
+    # https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
+    # This means docker images containing device nodes can't be pulled
+    # https://github.com/moby/moby/issues/35245
+    #
+    # The solution is to use DevicePolicy=auto
+    # https://github.com/kinvolk/kube-spawn/pull/328
+    #
+    # DevicePolicy=auto is the default for systemd-run and allows access to all devices
+    # as long as we don't add any --property=DeviceAllow= flags
+    # https://manpages.debian.org/bookworm/systemd/systemd.resource-control.5.en.html
+    #
+    # We can now successfully run:
+    # mknod /dev/port c 1 4
+    # Or pull docker images containing device nodes:
+    # docker pull oraclelinux@sha256:d49469769e4701925d5145c2676d5a10c38c213802cf13270ec3a12c9c84d643
 
     cmd = [
         "systemd-run",
@@ -1074,19 +1098,6 @@ def interactive_config():
 
         jail_name = ask_jail_name(jail_name)
 
-        print(
-            dedent(
-                f"""
-            Docker won't be installed by {COMMAND_NAME}.
-            But it can setup the jail with the capabilities required to run docker.
-            You can turn DOCKER_COMPATIBLE mode on/off post-install.
-        """
-            )
-        )
-
-        agree_with_default(
-            config, "docker_compatible", "Make jail docker compatible right now?"
-        )
         print()
         agree_with_default(
             config, "gpu_passthrough_intel", "Passthrough the intel GPU (if present)?"
@@ -1261,11 +1272,16 @@ def create_jail(**kwargs):
             "gpu_passthrough_intel",
             "gpu_passthrough_nvidia",
             "release",
+            "seccomp",
             "startup",
             "systemd_nspawn_user_args",
         ]:
             value = kwargs.pop(option)
-            if value:
+            if (
+                value is not None
+                and len(value)
+                and value is not config.my_get(option, None)
+            ):
                 # TODO: this will wipe all systemd_nspawn_user_args from the template...
                 # Should there be an option to append them instead?
                 print(f"Overriding {option} config value with {value}.")
@@ -1641,10 +1657,9 @@ def list_jails():
 
         config = parse_config_file(get_jail_config_path(jail_name))
         if config:
-            # TODO: also list privileged once this setting is implemented
             jail["startup"] = config.my_getboolean("startup")
 
-            # TODO: deprecate gpu_passthrough and stop supporting it
+            # TODO: remove gpu_passthrough in future release
             if config.my_getboolean("gpu_passthrough", False):
                 jail["gpu_intel"] = True
                 jail["gpu_nvidia"] = True
@@ -2005,6 +2020,13 @@ def main():
         "--docker_compatible",  #
         type=int,
         choices=[0, 1],
+        help="DEPRECATED",
+    )
+    commands["create"].add_argument(
+        "--seccomp",  #
+        type=int,
+        choices=[0, 1],
+        help="turning off seccomp filtering improves performance at the expense of security",
     )
     commands["create"].add_argument(
         "-c",  #

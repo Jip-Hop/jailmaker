@@ -1,6 +1,8 @@
 startup=0
 gpu_passthrough_intel=1
 gpu_passthrough_nvidia=0
+# Turning off seccomp filtering improves performance at the expense of security
+seccomp=1
 
 # Use macvlan networking to provide an isolated network namespace,
 # so docker can manage firewall rules
