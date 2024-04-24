@@ -45,19 +45,19 @@ After an update of TrueNAS SCALE the symlink will be lost (but the shell aliases
 Creating jail with the default settings is as simple as:
 
 ```shell
-jlmkr create myjail
+jlmkr create --start myjail
 ```
 
 You may also specify a path to a config template, for a quick and consistent jail creation process.
 
 ```shell
-jlmkr create --config /path/to/config/template myjail
+jlmkr create --start --config /path/to/config/template myjail
 ```
 
 Or you can override the default config by using flags. See `jlmkr create --help` for the available options. Anything passed after the jail name will be passed to `systemd-nspawn` when starting the jail. See the `systemd-nspawn` manual for available options, specifically [Mount Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Mount_Options) and [Networking Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Networking_Options) are frequently used.
 
 ```shell
-jlmkr create --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
+jlmkr create --start --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
 ```
 
 If you omit the jail name, the create process is interactive. You'll be presented with questions which guide you through the process.
@@ -66,7 +66,7 @@ If you omit the jail name, the create process is interactive. You'll be presente
 jlmkr create
 ```
 
-After answering some questions you should have your first jail up and running!
+After answering some questions you should have created your first jail (and it should be running if you chose to start it after creating)!
 
 ### Startup Jails on Boot
 
@@ -184,9 +184,13 @@ To visually distinguish between a root shell inside the jail and a root shell ou
 echo "PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '" >> ~/.bashrc
 ```
 
+## Filing Issues and Community Support
+
+When in need of help or when you think you've found a bug in jailmaker, [please start with reading this](https://github.com/Jip-Hop/jailmaker/discussions/135).
+
 ## References
 
-- [TrueNAS Forum Thread about Jailmaker](https://www.truenas.com/community/threads/linux-jails-experimental-script.106926/)
+- [TrueNAS Forum Thread about Jailmaker](https://forums.truenas.com/t/linux-jails-sandboxes-containers-with-jailmaker/417)
 - [systemd-nspawn](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html)
 - [machinectl](https://manpages.debian.org/bookworm/systemd-container/machinectl.1.en.html)
 - [systemd-run](https://manpages.debian.org/bookworm/systemd/systemd-run.1.en.html)
