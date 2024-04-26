@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -923,12 +923,17 @@ def get_zfs_dataset(path):
     """
     Get ZFS dataset path.
     """
+    def clean_field(field):
+        # Put back spaces which were encoded
+        # https://github.com/openzfs/zfs/issues/11182
+        return field.replace('\\040', ' ')
+    
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
             fields = line.split()
-            if fields[1] == path and fields[2] == "zfs":
-                return fields[0]
+            if "zfs" == fields[2] and path == clean_field(fields[1]):
+                return clean_field(fields[0])
 
 
 def get_zfs_base_path():
@@ -955,7 +960,7 @@ def create_zfs_dataset(relative_path):
 def remove_zfs_dataset(relative_path):
     """
     Remove a ZFS Dataset.
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails/oldjail").
+    Receives the dataset to be removed relative to the jailmaker script (e.g. "jails/oldjail").
     """
     dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
     eprint(f"Removing ZFS Dataset {dataset_to_remove}")
@@ -1556,6 +1561,7 @@ def remove_jail(jail_name):
         eprint(f"A jail with name {jail_name} does not exist.")
         return 1
 
+    # TODO: print which dataset is about to be removed before the user confirmation
     check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
 
     if check == jail_name:
