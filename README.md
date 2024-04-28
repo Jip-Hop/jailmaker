@@ -2,6 +2,10 @@
 
 Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, portainer, podman, etc.) with full access to all files via bind mounts.
 
+## Video Tutorial
+
+[![TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video](https://img.youtube.com/vi/S0nTRvAHAP8/0.jpg)<br>Watch on YouTube](https://www.youtube.com/watch?v=S0nTRvAHAP8 "TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video")
+
 ## Disclaimer
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.**
