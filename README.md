@@ -2,6 +2,10 @@
 
 Persistent Linux 'jails' on TrueNAS SCALE to install software (docker-compose, portainer, podman, etc.) with full access to all files via bind mounts.
 
+## Video Tutorial
+
+[![TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video](https://img.youtube.com/vi/S0nTRvAHAP8/0.jpg)<br>Watch on YouTube](https://www.youtube.com/watch?v=S0nTRvAHAP8 "TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video")
+
 ## Disclaimer
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS.**
@@ -14,7 +18,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Will create a ZFS Dataset for each jail if the `jailmaker` directory is a dataset (easy snapshotting)
 - Optional: configuring the jail so you can run Docker inside it
-- Optional: GPU passthrough (including [nvidia GPU](README.md#nvidia-gpu) with the drivers bind mounted from the host)
+- Optional: GPU passthrough (including nvidia GPU with the drivers bind mounted from the host)
 - Starting the jail with your config applied
 
 ## Security
