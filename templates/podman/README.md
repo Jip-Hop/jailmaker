@@ -36,6 +36,9 @@ Start the jail with `jlmkr start mypodmanjail` and open a shell session inside t
 Then inside the jail setup the new rootless user:
 
 ```bash
+# podman rootless requires the shaodw-utils
+rpm --restore shadow-utils
+
 # Create new user
 adduser rootless
 # Set password for user
@@ -117,7 +120,11 @@ Resources mentioning `add_key keyctl bpf`
 - https://bbs.archlinux.org/viewtopic.php?id=252840
 - https://wiki.archlinux.org/title/systemd-nspawn
 - https://discourse.nixos.org/t/podman-docker-in-nixos-container-ideally-in-unprivileged-one/22909/12
+
 Resources mentioning `@keyring`
 - https://github.com/systemd/systemd/issues/17606
 - https://github.com/systemd/systemd/blob/1c62c4fe0b54fb419b875cb2bae82a261518a745/src/shared/seccomp-util.c#L604
-`@keyring` also includes `request_key` but doesn't include `bpf`
+- `@keyring` also includes `request_key` but doesn't include `bpf`
+
+Podman documentation mentioing `shadow-utils`:
+- https://docs.podman.io/en/latest/markdown/podman-run.1.html#rootless-containers
