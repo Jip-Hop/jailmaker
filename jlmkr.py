@@ -123,7 +123,6 @@ SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
 SYMLINK_NAME = "jlmkr"
-TEXT_EDITOR = "nano"
 
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
@@ -1021,6 +1020,17 @@ def agree_with_default(config, key, question):
     config.my_set(key, agree(question, default_answer))
 
 
+def get_text_editor():
+    def get_from_environ(key):
+        if editor := os.environ.get(key):
+            return shutil.which(editor)
+
+    return get_from_environ("VISUAL") \
+        or get_from_environ("EDITOR") \
+        or shutil.which("editor") \
+        or shutil.which("/usr/bin/editor") \
+        or "nano"
+
 def interactive_config():
     config = KeyValueParser()
     config.read_string(DEFAULT_CONFIG)
@@ -1049,7 +1059,7 @@ def interactive_config():
         input("Press Enter to open the text editor.")
 
         with tempfile.NamedTemporaryFile(mode="w+t") as f:
-            subprocess.call([TEXT_EDITOR, f.name])
+            subprocess.call([get_text_editor(), f.name])
             f.seek(0)
             # Start over with a new KeyValueParser to parse user config
             config = KeyValueParser()
@@ -1506,19 +1516,13 @@ def edit_jail(jail_name):
         return 1
 
     jail_config_path = get_jail_config_path(jail_name)
-    if not shutil.which(TEXT_EDITOR):
-        eprint(
-            f"Unable to edit config file: {jail_config_path}.",
-            f"\nThe {TEXT_EDITOR} text editor is not available",
-        )
-        return 1
 
     returncode = subprocess.run(
-        [TEXT_EDITOR, get_jail_config_path(jail_name)]
+        [get_text_editor(), jail_config_path]
     ).returncode
 
     if returncode != 0:
-        eprint("An error occurred while editing the jail config.")
+        eprint(f"An error occurred while editing {jail_config_path}.")
         return returncode
 
     if jail_is_running(jail_name):
@@ -1922,7 +1926,7 @@ def main():
         ),
         dict(
             name="edit",
-            help=f"edit jail config with {TEXT_EDITOR} text editor",
+            help=f"edit jail config with {get_text_editor()} text editor",
             func=edit_jail,
         ),
         dict(
