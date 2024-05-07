@@ -114,7 +114,7 @@ jlmkr exec myjail bash -c 'echo test; echo $RANDOM;'
 jlmkr edit myjail
 ```
 
-Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file, e.g. using the `jlmkr edit myjail` command (which uses the nano text editor). You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
+Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file using the `jlmkr edit myjail` command. This opens the config file in your favorite editor, as determined by following [Debian's guidelines](https://www.debian.org/doc/debian-policy/ch-customized-programs.html#editors-and-pagers) on the matter. You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
 ### Remove Jail
 
