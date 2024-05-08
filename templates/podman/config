@@ -31,11 +31,6 @@ release=39
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
     dnf -y install podman
-    # Add the required capabilities to the `newuidmap` and `newgidmap` binaries
-    # https://github.com/containers/podman/issues/2788#issuecomment-1016301663
-    # https://github.com/containers/podman/issues/12637#issuecomment-996524341
-    setcap cap_setuid+eip /usr/bin/newuidmap
-    setcap cap_setgid+eip /usr/bin/newgidmap
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
