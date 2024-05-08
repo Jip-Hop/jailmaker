@@ -126,5 +126,5 @@ Resources mentioning `@keyring`
 - https://github.com/systemd/systemd/blob/1c62c4fe0b54fb419b875cb2bae82a261518a745/src/shared/seccomp-util.c#L604
 - `@keyring` also includes `request_key` but doesn't include `bpf`
 
-Podman documentation mentioing `shadow-utils`:
+Podman documentation mentioning `shadow-utils`:
 - https://docs.podman.io/en/latest/markdown/podman-run.1.html#rootless-containers
