@@ -922,11 +922,12 @@ def get_zfs_dataset(path):
     """
     Get ZFS dataset path.
     """
+
     def clean_field(field):
         # Put back spaces which were encoded
         # https://github.com/openzfs/zfs/issues/11182
-        return field.replace('\\040', ' ')
-    
+        return field.replace("\\040", " ")
+
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
@@ -1025,11 +1026,14 @@ def get_text_editor():
         if editor := os.environ.get(key):
             return shutil.which(editor)
 
-    return get_from_environ("VISUAL") \
-        or get_from_environ("EDITOR") \
-        or shutil.which("editor") \
-        or shutil.which("/usr/bin/editor") \
+    return (
+        get_from_environ("VISUAL")
+        or get_from_environ("EDITOR")
+        or shutil.which("editor")
+        or shutil.which("/usr/bin/editor")
         or "nano"
+    )
+
 
 def interactive_config():
     config = KeyValueParser()
@@ -1517,9 +1521,7 @@ def edit_jail(jail_name):
 
     jail_config_path = get_jail_config_path(jail_name)
 
-    returncode = subprocess.run(
-        [get_text_editor(), jail_config_path]
-    ).returncode
+    returncode = subprocess.run([get_text_editor(), jail_config_path]).returncode
 
     if returncode != 0:
         eprint(f"An error occurred while editing {jail_config_path}.")
