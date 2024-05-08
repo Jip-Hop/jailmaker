@@ -6,10 +6,10 @@ seccomp=1
 
 # Use macvlan networking to provide an isolated network namespace,
 # so podman can manage firewall rules
-# Alternatively use --network-bridge=br1 instead of --network-macvlan
+# Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
-systemd_nspawn_user_args=--network-macvlan=eno1
+systemd_nspawn_user_args=--network-bridge=br1
     --resolv-conf=bind-host
     --system-call-filter='add_key keyctl bpf'
 
@@ -28,8 +28,6 @@ distro=fedora
 release=39
 
 # Install podman inside the jail
-# NOTE: this script will run in the host networking namespace and ignores
-# all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
     dnf -y install podman

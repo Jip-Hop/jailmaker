@@ -8,20 +8,7 @@
 
 Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create --start --config /mnt/tank/path/to/lxd/config mylxdjail`.
 
-Unfortunately snapd doesn't want to install from the `initial_setup` script inside the config file. So we manually finish the setup by running the following after creating and starting the jail:
-
-```bash
-# Repeat listing the jail until you see it has an IPv4 address
-jlmkr list
-
-# Install packages
-jlmkr exec mylxdjail bash -c 'apt-get update &&
-    apt-get install -y --no-install-recommends snapd &&
-    snap install lxd'
-
-```
-
-Choose the `dir` storage backend during `lxd init` and answer `yes` to "Would you like the LXD server to be available over the network?"
+We manually finish the setup by running the command below after creating and starting the jail. Choose the `dir` storage backend during `lxd init` and answer `yes` to "Would you like the LXD server to be available over the network?"
 
 ```bash
 jlmkr exec mylxdjail bash -c 'lxd init &&
