@@ -761,7 +761,7 @@ def start_jail(jail_name):
             )
             return returncode
         else:
-            print("Done with initial setup!")
+            print(f"Done with initial setup of jail {jail_name}!")
 
     return returncode
 
