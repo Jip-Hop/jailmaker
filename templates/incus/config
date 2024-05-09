@@ -3,15 +3,16 @@ startup=0
 gpu_passthrough_intel=0
 gpu_passthrough_nvidia=0
 # Turning off seccomp filtering improves performance at the expense of security
-seccomp=1
+# TODO: don't disable seccomp but specify which syscalls should be allowed
+seccomp=0
 
 # Use macvlan networking to provide an isolated network namespace,
 # so incus can manage firewall rules
-# Alternatively use --network-bridge=br1 instead of --network-macvlan
+# Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # TODO: don't use --capability=all but specify only the required capabilities
-systemd_nspawn_user_args=--network-macvlan=eno1
+systemd_nspawn_user_args=--network-bridge=br1
     --resolv-conf=bind-host
     --capability=all
     --bind=/dev/fuse
@@ -36,8 +37,6 @@ release=bookworm
 
 # Install incus according to:
 # https://github.com/zabbly/incus#installation
-# NOTE: this script will run in the host networking namespace and ignores
-# all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
     apt-get update && apt-get -y install curl
@@ -54,6 +53,7 @@ initial_setup=#!/usr/bin/bash
 
     EOF'
     apt-get update
+    apt-get -y install incus incus-ui-canonical
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed

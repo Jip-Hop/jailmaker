@@ -6,10 +6,10 @@ seccomp=1
 
 # Use macvlan networking to provide an isolated network namespace,
 # so docker can manage firewall rules
-# Alternatively use --network-bridge=br1 instead of --network-macvlan
+# Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
-systemd_nspawn_user_args=--network-macvlan=eno1
+systemd_nspawn_user_args=--network-bridge=br1
     --resolv-conf=bind-host
     --system-call-filter='add_key keyctl bpf'
 
@@ -29,8 +29,8 @@ release=bookworm
 
 # Install docker inside the jail:
 # https://docs.docker.com/engine/install/debian/#install-using-the-repository
-# NOTE: this script will run in the host networking namespace and ignores
-# all systemd_nspawn_user_args such as bind mounts
+# Will also install the NVIDIA Container Toolkit if gpu_passthrough_nvidia=1 during initial setup
+# https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
 
@@ -43,8 +43,26 @@ initial_setup=#!/usr/bin/bash
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
     tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # The /usr/bin/nvidia-smi will be present when gpu_passthrough_nvidia=1
+    if [ -f /usr/bin/nvidia-smi ]; then
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey -o /etc/apt/keyrings/nvidia.asc
+        chmod a+r /etc/apt/keyrings/nvidia.asc
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia.asc] https://#g' | \
+        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+        apt-get update
+        apt-get install -y nvidia-container-toolkit
+
+        nvidia-ctk runtime configure --runtime=docker
+        systemctl restart docker
+    fi
+
+    docker info
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
