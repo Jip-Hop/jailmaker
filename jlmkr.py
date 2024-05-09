@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -44,7 +44,7 @@ docker_compatible=0
 seccomp=1
 
 # Below you may add additional systemd-nspawn flags behind systemd_nspawn_user_args=
-# To mount host storage in the jail, you may add: --bind='/mnt/pool/dataset:/home' 
+# To mount host storage in the jail, you may add: --bind='/mnt/pool/dataset:/home'
 # To readonly mount host storage, you may add: --bind-ro=/etc/certificates
 # To use macvlan networking add: --network-macvlan=eno1 --resolv-conf=bind-host
 # To use bridge networking add: --network-bridge=br1 --resolv-conf=bind-host
@@ -361,8 +361,6 @@ def passthrough_nvidia(
                     .decode()
                     .split("\n")
                     if x
-                    # Strip individual modules for current kernel, since we add the whole directory later
-                    and "/usr/lib/x86_64-linux-gnu/nvidia/current" not in x
                 ]
             )
         )
@@ -408,6 +406,8 @@ def passthrough_nvidia(
             if x
         )
         library_folders = set(str(x.parent) for x in nvidia_libraries)
+        for lf in library_folders:
+            nvidia_mounts.append(f"--bind-ro={lf}")
 
         # Only write if the conf file doesn't yet exist or has different contents
         existing_conf_libraries = set()
