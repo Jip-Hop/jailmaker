@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -365,6 +365,8 @@ def passthrough_nvidia(
                     .decode()
                     .split("\n")
                     if x
+                    # Strip individual modules for current kernel, since we add the whole directory later
+                    and "/usr/lib/x86_64-linux-gnu/nvidia/current" not in x
                 ]
             )
         )
@@ -381,6 +383,9 @@ def passthrough_nvidia(
     # Also make nvidia-smi available inside the path,
     # while mounting the symlink will be resolved and nvidia-smi will appear as a regular file
     nvidia_files.add("/usr/bin/nvidia-smi")
+
+    # Use current module dir
+    nvidia_files.add("/usr/lib/x86_64-linux-gnu/nvidia/current")
 
     nvidia_mounts = []
 
@@ -926,7 +931,7 @@ def get_zfs_dataset(path):
         # Put back spaces which were encoded
         # https://github.com/openzfs/zfs/issues/11182
         return field.replace('\\040', ' ')
-    
+
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
