@@ -37,12 +37,15 @@ Then restart the network interface inside the jail `systemctl restart systemd-ne
 
 # Passthrough a TrueNAS Bridge Interface
 By creating a network bridge in the TrueNAS Network page you can bridge the incoming physical network interface to a virtual interface that can be passed to the jail. This type of interface has the benefits of a MAC VLAN interface without the flaws (host to jail networking). Once working the virtual interface can either be assigned a static IP or obtain one automatically via DHCP.
+
 ### Flaws
-This type of interface takes much longer to set up both in complexity and wait time as there is a current flaw in which HDCP can take between 10 seconds and a minute.
+This type of interface takes much longer to set up both in complexity and wait time as there is a current flaw in which DHCP can take between 10 seconds and a minute.
 Furthermore, if the configuration is not correct it can render your TrueNAS inaccessible via ssh, necessitating a reset using a keyboard and monitor plugged into the TrueNAS server.
+
 ### Setup
-[TrueNAS Bridge interface guide](https://www.youtube.com/watch?v=7clQw132w58)
-May be helpful to connect a monitor and keyboard to the NAS and use /etc/netcli to reset the networking interface. Kept bothering with "Register Default Gateway" warning... I just clicked Cancel.
+[![TrueNAS Scale: Setting up a Static IP and Network Bridge // Access NAS host from VM - YouTube Video](https://img.youtube.com/vi/uPkoeWUfiHU/0.jpg)<br>Watch on YouTube](https://www.youtube.com/watch?v=uPkoeWUfiHU "TrueNAS Scale: Setting up a Static IP and Network Bridge // Access NAS host from VM - YouTube Video")
+
+The above YouTube video may be helpful when setting up the bridge interface. Note: if done incorrectly, you may lock yourself out... It may take several tries... You may need to connect a monitor and keyboard to the NAS and use `/etc/netcli` to reset the networking interface.
 
 Add the `--network-bridge=br1 --resolv-conf=bind-host` flag when asked for additional flags during jail creation, or set it post-creation by editing the `SYSTEMD_NSPAWN_USER_ARGS` variable inside the config file.
 
