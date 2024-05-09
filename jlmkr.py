@@ -384,7 +384,7 @@ def passthrough_nvidia(
     # while mounting the symlink will be resolved and nvidia-smi will appear as a regular file
     nvidia_files.add("/usr/bin/nvidia-smi")
 
-    # Use common module dir
+    # Use current module dir
     nvidia_files.add("/usr/lib/x86_64-linux-gnu/nvidia/current")
 
     nvidia_mounts = []
