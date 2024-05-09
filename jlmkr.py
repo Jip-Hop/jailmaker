@@ -365,6 +365,8 @@ def passthrough_nvidia(
                     .decode()
                     .split("\n")
                     if x
+                    # Strip individual modules for current kernel, since we add the whole directory later
+                    and "/usr/lib/x86_64-linux-gnu/nvidia/current" not in x
                 ]
             )
         )
@@ -381,6 +383,9 @@ def passthrough_nvidia(
     # Also make nvidia-smi available inside the path,
     # while mounting the symlink will be resolved and nvidia-smi will appear as a regular file
     nvidia_files.add("/usr/bin/nvidia-smi")
+
+    # Use common module dir
+    nvidia_files.add("/usr/lib/x86_64-linux-gnu/nvidia/current")
 
     nvidia_mounts = []
 
@@ -926,7 +931,7 @@ def get_zfs_dataset(path):
         # Put back spaces which were encoded
         # https://github.com/openzfs/zfs/issues/11182
         return field.replace('\\040', ' ')
-    
+
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
