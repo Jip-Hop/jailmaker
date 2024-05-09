@@ -353,11 +353,13 @@ def passthrough_nvidia(
         return
 
     try:
+        # List nvidia items, without the libraries, since we look those up later in library_folders
+        command = "/bin/bash -c 'nvidia-container-cli list | grep -vFf <(nvidia-container-cli list --libraries)'"
         nvidia_files = set(
             (
                 [
                     x
-                    for x in subprocess.check_output(["nvidia-container-cli", "list"])
+                    for x in subprocess.check_output(command, shell=True)
                     .decode()
                     .split("\n")
                     if x
@@ -403,19 +405,7 @@ def passthrough_nvidia(
             if x
         )
         library_folders = set(str(x.parent) for x in nvidia_libraries)
-
-        # Remove sub-mounts of this from the existing nvidia_mounts list
-        # Iterate through a copy of nvidia_mounts to avoid modifying it while iterating
-        for nm in nvidia_mounts[:]:
-            for lf in library_folders:
-                # Split the mount on "=" to get the path part
-                _, path = nm.split("=")
-                # Check if the path starts with the library folder
-                if path.startswith(lf/):
-                    nvidia_mounts.remove(nm)
-                    break
-
-        # Add the parent mount
+        # Add the library folders as mounts
         for lf in library_folders:
             nvidia_mounts.append(f"--bind-ro={lf}")
 
