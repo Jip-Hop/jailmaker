@@ -1,4 +1,6 @@
-# TrueNAS Compatibility
+# Jailmaker Docs
+
+## TrueNAS Compatibility
 |   |   |
 |---|---|
 |TrueNAS Core|❌|
@@ -6,7 +8,7 @@
 |TrueNAS 23.10|✅|
 |TrueNAS 24.04|✅|
 
-# Distro Compatibility
+## Distro Compatibility
 |   |   |
 |---|---|
 |Debian 11 Bullseye|✅|
