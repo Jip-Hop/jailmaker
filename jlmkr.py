@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -43,15 +43,13 @@ docker_compatible=0
 # Turning off seccomp filtering improves performance at the expense of security
 seccomp=1
 
-# Add additional systemd-nspawn flags
-# E.g. to mount host storage in the jail (--bind-ro for readonly):
-# --bind='/mnt/pool/dataset:/home' --bind-ro=/etc/certificates
-# E.g. macvlan networking:
-# --network-macvlan=eno1 --resolv-conf=bind-host
-# E.g. bridge networking:
-# --network-bridge=br1 --resolv-conf=bind-host
-# E.g. allow syscalls required by docker:
-# --system-call-filter='add_key keyctl bpf'
+# Below you may add additional systemd-nspawn flags behind systemd_nspawn_user_args=
+# To mount host storage in the jail, you may add: --bind='/mnt/pool/dataset:/home' 
+# To readonly mount host storage, you may add: --bind-ro=/etc/certificates
+# To use macvlan networking add: --network-macvlan=eno1 --resolv-conf=bind-host
+# To use bridge networking add: --network-bridge=br1 --resolv-conf=bind-host
+# Ensure to change eno1/br1 to the interface name you want to use
+# To allow syscalls required by docker add: --system-call-filter='add_key keyctl bpf'
 systemd_nspawn_user_args=
 
 # Specify command/script to run on the HOST before starting the jail
@@ -73,10 +71,8 @@ post_stop_hook=
 distro=debian
 release=bookworm
 
-# Specify command/script to run IN THE JAIL before the first start
+# Specify command/script to run IN THE JAIL on the first start (once networking is ready in the jail)
 # Useful to install packages on top of the base rootfs
-# NOTE: this script will run in the host networking namespace and
-# ignores all systemd_nspawn_user_args such as bind mounts
 initial_setup=
 # initial_setup=bash -c 'apt-get update && apt-get -y upgrade'
 
@@ -545,55 +541,6 @@ def start_jail(jail_name):
 
     seccomp = config.my_getboolean("seccomp")
 
-    # Handle initial setup
-    initial_setup = config.my_get("initial_setup")
-
-    # Alternative method to setup on first boot:
-    # https://www.undrground.org/2021/01/25/adding-a-single-run-task-via-systemd/
-    # If there's no machine-id, then this the first time the jail is started
-    if initial_setup and not os.path.exists(
-        os.path.join(jail_rootfs_path, "etc/machine-id")
-    ):
-        initial_setup_file = None
-
-        if initial_setup.startswith("#!"):
-            # Write a script file and call that
-            initial_setup_file = os.path.abspath(
-                os.path.join(jail_path, ".initial_setup")
-            )
-            print(initial_setup, file=open(initial_setup_file, "w"))
-            stat_chmod(initial_setup_file, 0o700)
-            cmd = [
-                "systemd-nspawn",
-                "-q",
-                "-D",
-                jail_rootfs_path,
-                f"--bind-ro={initial_setup_file}:/root/initial_startup",
-                "/root/initial_startup",
-            ]
-        else:
-            # Run the command directly if it doesn't start with a shebang
-            cmd = [
-                "systemd-nspawn",
-                "-q",
-                "-D",
-                jail_rootfs_path,
-                *shlex.split(initial_setup),
-            ]
-
-        returncode = subprocess.run(cmd).returncode
-
-        # Cleanup the initial_setup_file
-        if initial_setup_file:
-            Path(initial_setup_file).unlink(missing_ok=True)
-
-        if returncode != 0:
-            eprint("Failed to run initial setup:")
-            eprint(initial_setup)
-            eprint()
-            eprint("Abort starting jail.")
-            return returncode
-
     systemd_run_additional_args = [
         f"--unit={SYMLINK_NAME}-{jail_name}",
         f"--working-directory=./{jail_path}",
@@ -604,6 +551,24 @@ def start_jail(jail_name):
         f"--machine={jail_name}",
         f"--directory={JAIL_ROOTFS_NAME}",
     ]
+
+    # The systemd-nspawn manual explicitly mentions:
+    # Device nodes may not be created
+    # https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
+    # This means docker images containing device nodes can't be pulled
+    # https://github.com/moby/moby/issues/35245
+    #
+    # The solution is to use DevicePolicy=auto
+    # https://github.com/kinvolk/kube-spawn/pull/328
+    #
+    # DevicePolicy=auto is the default for systemd-run and allows access to all devices
+    # as long as we don't add any --property=DeviceAllow= flags
+    # https://manpages.debian.org/bookworm/systemd/systemd.resource-control.5.en.html
+    #
+    # We can now successfully run:
+    # mknod /dev/port c 1 4
+    # Or pull docker images containing device nodes:
+    # docker pull oraclelinux@sha256:d49469769e4701925d5145c2676d5a10c38c213802cf13270ec3a12c9c84d643
 
     if config.my_getboolean("docker_compatible"):
         eprint("WARNING: DEPRECATED OPTION")
@@ -704,23 +669,28 @@ def start_jail(jail_name):
             "--setenv=SYSTEMD_SECCOMP=0",
         ]
 
-    # The systemd-nspawn manual explicitly mentions:
-    # Device nodes may not be created
-    # https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html
-    # This means docker images containing device nodes can't be pulled
-    # https://github.com/moby/moby/issues/35245
-    #
-    # The solution is to use DevicePolicy=auto
-    # https://github.com/kinvolk/kube-spawn/pull/328
-    #
-    # DevicePolicy=auto is the default for systemd-run and allows access to all devices
-    # as long as we don't add any --property=DeviceAllow= flags
-    # https://manpages.debian.org/bookworm/systemd/systemd.resource-control.5.en.html
-    #
-    # We can now successfully run:
-    # mknod /dev/port c 1 4
-    # Or pull docker images containing device nodes:
-    # docker pull oraclelinux@sha256:d49469769e4701925d5145c2676d5a10c38c213802cf13270ec3a12c9c84d643
+    initial_setup = False
+
+    # If there's no machine-id, then this the first time the jail is started
+    if not os.path.exists(os.path.join(jail_rootfs_path, "etc/machine-id")) and (
+        initial_setup := config.my_get("initial_setup")
+    ):
+        if not initial_setup.startswith("#!"):
+            initial_setup = "#!/bin/sh\n" + initial_setup
+
+        initial_setup_file_jailed_path = "/root/jlmkr-initial-setup"
+        initial_setup_file_host_path = os.path.abspath(
+            jail_rootfs_path + initial_setup_file_jailed_path
+        )
+
+        # Write a script file to call during initial setup
+        print(initial_setup, file=open(initial_setup_file_host_path, "w"))
+        stat_chmod(initial_setup_file_host_path, 0o700)
+
+        # Ensure the jail init system is ready before we start the initial_setup
+        systemd_nspawn_additional_args += [
+            "--notify-ready=yes",
+        ]
 
     cmd = [
         "systemd-run",
@@ -754,6 +724,44 @@ def start_jail(jail_name):
         """
             )
         )
+
+        return returncode
+
+    # Handle initial setup after jail is up and running (for the first time)
+    if initial_setup:
+        print("About to run the initial setup.")
+        print("Waiting for networking in the jail to be ready.")
+        print("Please wait (this may take 90s in case of bridge networking)...")
+        returncode = exec_jail(
+            jail_name,
+            [
+                "--",
+                "systemd-run",
+                f"--unit={os.path.basename(initial_setup_file_jailed_path)}",
+                "--quiet",
+                "--pipe",
+                "--wait",
+                "--service-type=exec",
+                "--property=After=network-online.target",
+                "--property=Wants=network-online.target",
+                initial_setup_file_jailed_path,
+            ],
+        )
+
+        # Cleanup the initial_setup_file_host_path
+        if initial_setup_file_host_path:
+            Path(initial_setup_file_host_path).unlink(missing_ok=True)
+
+        if returncode != 0:
+            eprint("Tried to run the following commands inside the jail:")
+            eprint(initial_setup)
+            eprint()
+            eprint(
+                f"""{RED}{BOLD}Failed to run initial setup... you may want to stop and remove the jail and try again.{NORMAL}"""
+            )
+            return returncode
+        else:
+            print(f"Done with initial setup of jail {jail_name}!")
 
     return returncode
 
@@ -922,11 +930,12 @@ def get_zfs_dataset(path):
     """
     Get ZFS dataset path.
     """
+
     def clean_field(field):
         # Put back spaces which were encoded
         # https://github.com/openzfs/zfs/issues/11182
-        return field.replace('\\040', ' ')
-    
+        return field.replace("\\040", " ")
+
     path = os.path.realpath(path)
     with open("/proc/mounts", "r") as f:
         for line in f:
@@ -1025,11 +1034,14 @@ def get_text_editor():
         if editor := os.environ.get(key):
             return shutil.which(editor)
 
-    return get_from_environ("VISUAL") \
-        or get_from_environ("EDITOR") \
-        or shutil.which("editor") \
-        or shutil.which("/usr/bin/editor") \
+    return (
+        get_from_environ("VISUAL")
+        or get_from_environ("EDITOR")
+        or shutil.which("editor")
+        or shutil.which("/usr/bin/editor")
         or "nano"
+    )
+
 
 def interactive_config():
     config = KeyValueParser()
@@ -1517,9 +1529,7 @@ def edit_jail(jail_name):
 
     jail_config_path = get_jail_config_path(jail_name)
 
-    returncode = subprocess.run(
-        [get_text_editor(), jail_config_path]
-    ).returncode
+    returncode = subprocess.run([get_text_editor(), jail_config_path]).returncode
 
     if returncode != 0:
         eprint(f"An error occurred while editing {jail_config_path}.")

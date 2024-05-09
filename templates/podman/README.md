@@ -46,6 +46,10 @@ usermod --del-subuids 0-4294967295 --del-subgids 0-4294967295 rootless
 # Set a specific range, so it fits inside the number of available UIDs
 usermod --add-subuids 65536-131071 --add-subgids 65536-131071 rootless
 
+# Add the required capabilities to the `newuidmap` and `newgidmap` binaries
+setcap cap_setuid+eip /usr/bin/newuidmap
+setcap cap_setgid+eip /usr/bin/newgidmap
+
 # Check the assigned range
 cat /etc/subuid
 # Check the available range
@@ -121,3 +125,6 @@ Resources mentioning `@keyring`
 - https://github.com/systemd/systemd/issues/17606
 - https://github.com/systemd/systemd/blob/1c62c4fe0b54fb419b875cb2bae82a261518a745/src/shared/seccomp-util.c#L604
 `@keyring` also includes `request_key` but doesn't include `bpf`
+Resources mentioning `cap_setuid+eip`, `cap_setgid+eip`, `newuidmap` and `newgidmap`
+- https://github.com/containers/podman/issues/2788#issuecomment-1016301663
+- https://github.com/containers/podman/issues/12637#issuecomment-996524341

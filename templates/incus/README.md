@@ -8,11 +8,10 @@
 
 Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create --start --config /mnt/tank/path/to/incus/config myincusjail`.
 
-Unfortunately incus doesn't want to install from the `initial_setup` script inside the config file. So we manually finish the setup by running the following after creating and starting the jail:
+We manually finish the setup by running the following after creating and starting the jail:
 
 ```bash
-jlmkr exec myincusjail bash -c 'apt-get -y install incus incus-ui-canonical &&
-    incus admin init'
+jlmkr exec myincusjail bash -c 'incus admin init'
 ```    
 
 Follow [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).

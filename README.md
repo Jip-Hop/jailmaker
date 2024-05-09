@@ -90,13 +90,15 @@ jlmkr start myjail
 
 ### List Jails
 
+See list of jails (including running, startup state, GPU passthrough, distro, and IP).
+
 ```shell
 jlmkr list
 ```
 
 ### Execute Command in Jail
 
-You may want to execute a command inside a jail, for example from a shell script or a CRON job. The example below executes the `env` command inside the jail.
+You may want to execute a command inside a jail, for example manually from the TrueNAS shell, a shell script or a CRON job. The example below executes the `env` command inside the jail.
 
 ```shell
 jlmkr exec myjail env
@@ -118,6 +120,8 @@ Once you've created a jail, it will exist in a directory inside the `jails` dir 
 
 ### Remove Jail
 
+Delete a jail and remove it's files (requires confirmation).
+
 ```shell
 jlmkr remove myjail
 ```
@@ -136,6 +140,8 @@ jlmkr restart myjail
 
 ### Jail Shell
 
+Switch into the jail's shell.
+
 ```shell
 jlmkr shell myjail
 ```
@@ -148,6 +154,8 @@ jlmkr status myjail
 
 ### Jail Logs
 
+View a jail's logs.
+
 ```shell
 jlmkr log myjail
 ```
@@ -158,17 +166,21 @@ Expert users may use the following additional commands to manage jails directly:
 
 ## Networking
 
-By default the jail will have full access to the host network. No further setup is required. You may download and install additional packages inside the jail. Note that some ports are already occupied by TrueNAS SCALE (e.g. 443 for the web interface), so your jail can't listen on these ports. This is inconvenient if you want to host some services (e.g. traefik) inside the jail. To workaround this issue when using host networking, you may disable DHCP and add several static IP addresses (Aliases) through the TrueNAS web interface. If you setup the TrueNAS web interface to only listen on one of these IP addresses, the ports on the remaining IP addresses remain available for the jail to listen on.
+By default a jails will use the same networking namespace, with access to all (physical) interfaces the TrueNAS host has access to. No further setup is required. You may download and install additional packages inside the jail. Note that some ports are already occupied by TrueNAS SCALE (e.g. 443 for the web interface), so your jail can't listen on these ports.
 
-See [Advanced Networking](./NETWORKING.md) for more.
+Depending on the service this may be o.k. For example Home Assistant will bind to port 8123, leaving the 80 and 443 ports free from clashes for the TrueNAS web interface. You can then either connect to the service on 8123, or use a reverse proxy such as traefik.
+
+But clashes may happen if you want some services (e.g. traefik) inside the jail to listen on port 443. To workaround this issue when using host networking, you may disable DHCP and add several static IP addresses (Aliases) through the TrueNAS web interface. If you setup the TrueNAS web interface to only listen on one of these IP addresses, the ports on the remaining IP addresses remain available for the jail to listen on.
+
+See [the networking docs](./docs/network.md) for more advanced options (bridge and macvlan networking).
 
 ## Docker
 
-Using the [docker config template](./templates/docker/README.md) is recommended if you want to run docker inside the jail. You may of course manually install docker inside a jail. But keep in mind that you need to add `--system-call-filter='add_key keyctl bpf'` (or disable seccomp filtering). It is [not recommended to use host networking for a jail in which you run docker](https://github.com/Jip-Hop/jailmaker/issues/119). Docker needs to manage iptables rules, which it can safely do in its own networking namespace (when using [bridge or macvlan networking](./NETWORKING.md) for the jail).
+Using the [docker config template](./templates/docker/README.md) is recommended if you want to run docker inside the jail. You may of course manually install docker inside a jail. But keep in mind that you need to add `--system-call-filter='add_key keyctl bpf'` (or disable seccomp filtering). It is [not recommended to use host networking for a jail in which you run docker](https://github.com/Jip-Hop/jailmaker/issues/119). Docker needs to manage iptables rules, which it can safely do in its own networking namespace (when using [bridge or macvlan networking](./docs/network.md) for the jail).
 
 ## Documentation
 
-Additional documentation contributed by the community can be found in [the docs directory](./docs/).
+Additional documentation can be found in [the docs directory](./docs/) (contributions are welcome!).
 
 ## Comparison
 
@@ -177,16 +189,6 @@ TODO: write comparison between systemd-nspawn (without `jailmaker`), LXC, VMs, D
 ## Incompatible Distros
 
 The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
-
-## Tips & Tricks
-
-### Colorized bash prompt
-
-To visually distinguish between a root shell inside the jail and a root shell outside the jail, it's possible to colorize the shell prompt. When using a debian jail with the bash shell, you may run the following command to get a yellow prompt inside the jail (will be activated the next time you run `jlmkr shell myjail`):
-
-```bash
-echo "PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '" >> ~/.bashrc
-```
 
 ## Filing Issues and Community Support
 

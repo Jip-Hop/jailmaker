@@ -3,11 +3,12 @@ startup=0
 gpu_passthrough_intel=0
 gpu_passthrough_nvidia=0
 # Turning off seccomp filtering improves performance at the expense of security
-seccomp=1
+# TODO: don't disable seccomp but specify which syscalls should be allowed
+seccomp=0
 
 # Use macvlan networking to provide an isolated network namespace,
 # so lxd can manage firewall rules
-# Alternatively use --network-bridge=br1 instead of --network-macvlan
+# Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # TODO: don't use --capability=all but specify only the required capabilities
@@ -34,12 +35,13 @@ pre_start_hook=#!/usr/bin/bash
 distro=ubuntu
 release=jammy
 
-# NOTE: this script will run in the host networking namespace and ignores
-# all systemd_nspawn_user_args such as bind mounts
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
     # https://discuss.linuxcontainers.org/t/snap-inside-privileged-lxd-container/13691/8
     ln -sf /bin/true /usr/local/bin/udevadm
+    apt-get update
+    apt-get install -y --no-install-recommends snapd
+    snap install lxd
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
