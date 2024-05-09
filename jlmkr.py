@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.5.0"
+__version__ = "1.4.1"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -403,6 +403,19 @@ def passthrough_nvidia(
             if x
         )
         library_folders = set(str(x.parent) for x in nvidia_libraries)
+
+        # Remove sub-mounts of this from the existing nvidia_mounts list
+        # Iterate through a copy of nvidia_mounts to avoid modifying it while iterating
+        for nm in nvidia_mounts[:]:
+            for lf in library_folders:
+                # Split the mount on "=" to get the path part
+                _, path = nm.split("=")
+                # Check if the path starts with the library folder
+                if path.startswith(lf/):
+                    nvidia_mounts.remove(nm)
+                    break
+
+        # Add the parent mount
         for lf in library_folders:
             nvidia_mounts.append(f"--bind-ro={lf}")
 
