@@ -353,16 +353,26 @@ def passthrough_nvidia(
         return
 
     try:
-        # List nvidia items, without the libraries, since we look those up later in library_folders
-        command = "/bin/bash -c 'nvidia-container-cli list | grep -vFf <(nvidia-container-cli list --libraries)'"
+        # Get list of libraries
+        nvidia_libraries = set(
+            [
+                x
+                for x in subprocess.check_output(["nvidia-container-cli", "list", "--libraries"])
+                .decode()
+                .split("\n")
+                if x
+            ]
+        )
+        # Get full list of files, but excluding library ones from above
         nvidia_files = set(
             (
                 [
                     x
-                    for x in subprocess.check_output(command, shell=True)
+                    for x in subprocess.check_output(["nvidia-container-cli", "list"])
                     .decode()
                     .split("\n")
                     if x
+                    and x not in nvidia_libraries
                 ]
             )
         )
@@ -395,16 +405,7 @@ def passthrough_nvidia(
 
     # Check if the parent dir exists where we want to write our conf file
     if ld_so_conf_path.parent.exists():
-        nvidia_libraries = set(
-            Path(x)
-            for x in subprocess.check_output(
-                ["nvidia-container-cli", "list", "--libraries"]
-            )
-            .decode()
-            .split("\n")
-            if x
-        )
-        library_folders = set(str(x.parent) for x in nvidia_libraries)
+        library_folders = set(str(Path(x).parent) for x in nvidia_libraries)
         # Add the library folders as mounts
         for lf in library_folders:
             nvidia_mounts.append(f"--bind-ro={lf}")
