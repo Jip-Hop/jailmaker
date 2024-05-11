@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -44,7 +44,7 @@ docker_compatible=0
 seccomp=1
 
 # Below you may add additional systemd-nspawn flags behind systemd_nspawn_user_args=
-# To mount host storage in the jail, you may add: --bind='/mnt/pool/dataset:/home' 
+# To mount host storage in the jail, you may add: --bind='/mnt/pool/dataset:/home'
 # To readonly mount host storage, you may add: --bind-ro=/etc/certificates
 # To use macvlan networking add: --network-macvlan=eno1 --resolv-conf=bind-host
 # To use bridge networking add: --network-bridge=br1 --resolv-conf=bind-host
@@ -353,6 +353,17 @@ def passthrough_nvidia(
         return
 
     try:
+        # Get list of libraries
+        nvidia_libraries = set(
+            [
+                x
+                for x in subprocess.check_output(["nvidia-container-cli", "list", "--libraries"])
+                .decode()
+                .split("\n")
+                if x
+            ]
+        )
+        # Get full list of files, but excluding library ones from above
         nvidia_files = set(
             (
                 [
@@ -361,6 +372,7 @@ def passthrough_nvidia(
                     .decode()
                     .split("\n")
                     if x
+                    and x not in nvidia_libraries
                 ]
             )
         )
@@ -393,16 +405,10 @@ def passthrough_nvidia(
 
     # Check if the parent dir exists where we want to write our conf file
     if ld_so_conf_path.parent.exists():
-        nvidia_libraries = set(
-            Path(x)
-            for x in subprocess.check_output(
-                ["nvidia-container-cli", "list", "--libraries"]
-            )
-            .decode()
-            .split("\n")
-            if x
-        )
-        library_folders = set(str(x.parent) for x in nvidia_libraries)
+        library_folders = set(str(Path(x).parent) for x in nvidia_libraries)
+        # Add the library folders as mounts
+        for lf in library_folders:
+            nvidia_mounts.append(f"--bind-ro={lf}")
 
         # Only write if the conf file doesn't yet exist or has different contents
         existing_conf_libraries = set()
