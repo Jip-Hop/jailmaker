@@ -25,6 +25,22 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 
 Despite what the word 'jail' implies, jailmaker's intended use case is to create one or more additional filesystems to run alongside SCALE with minimal isolation. By default the root user in the jail with uid 0 is mapped to the host's uid 0. This has [obvious security implications](https://linuxcontainers.org/lxc/security/#privileged-containers). If this is not acceptable to you, you may lock down the jails by [limiting capabilities](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Security_Options) and/or using [user namespacing](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#User_Namespacing_Options) or use a VM instead.
 
+### seccomp
+Seccomp is a Linux kernel feature that restricts programs from making unauthorized system calls.  This means that there are times where a process run inside a jail will be killed with the error "Operation not permitted."  In order to find out which syscall needs to be added to the `--system-call-filter=` configuration you can use `strace`.  
+
+For example:
+```
+# /usr/bin/intel_gpu_top
+Failed to initialize PMU! (Operation not permitted)
+
+# strace /usr/bin/intel_gpu_top 2>&1 |grep Operation\ not\ permitted
+perf_event_open({type=0x10 /* PERF_TYPE_??? */, size=PERF_ATTR_SIZE_VER7, config=0x100002, sample_period=0, sample_type=0, read_format=PERF_FORMAT_TOTAL_TIME_ENABLED|PERF_FORMAT_GROUP, precise_ip=0 /* arbitrary skid */, use_clockid=1, ...}, -1, 0, -1, 0) = -1 EPERM (Operation not permitted)
+write(2, "Failed to initialize PMU! (Opera"..., 52Failed to initialize PMU! (Operation not permitted)
+```
+The syscall that needs to be added to the `--system-call-filter` option in the jlmkr config in this case would be `perf_event_open`.  You may need to run strace multiple times.
+
+Seccomp is important for security, but as a last resort can be disabled by setting `seccomp=0` in the jail config
+
 ## Installation
 
 Beginning with 24.04 (Dragonfish), TrueNAS SCALE includes the systemd-nspawn containerization program in the base system. Technically there's nothing to install. You only need the `jlmkr.py` script file in the right place. [Instructions with screenshots](https://www.truenas.com/docs/scale/scaletutorials/apps/sandboxes/) are provided on the TrueNAS website. Start by creating a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`. If you login as non-root user (e.g. as admin), **you must become root first** by executing `sudo su`.
