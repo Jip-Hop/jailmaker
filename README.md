@@ -26,7 +26,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 Despite what the word 'jail' implies, jailmaker's intended use case is to create one or more additional filesystems to run alongside SCALE with minimal isolation. By default the root user in the jail with uid 0 is mapped to the host's uid 0. This has [obvious security implications](https://linuxcontainers.org/lxc/security/#privileged-containers). If this is not acceptable to you, you may lock down the jails by [limiting capabilities](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Security_Options) and/or using [user namespacing](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#User_Namespacing_Options) or use a VM instead.
 
 ### seccomp
-Seccomp is a Linux kernel feature that restricts programs from making unauthorized system calls.  This means that there are times where a process run inside a jail will be killed with the error "Operation not permitted."  In order to find out which syscall needs to be added to the `--system-call-filter=` configuration you can use `strace`.  
+Seccomp is a Linux kernel feature that restricts programs from making unauthorized system calls.  This means that when seccomp is enabled there can be times where a process run inside a jail will be killed with the error "Operation not permitted."  In order to find out which syscall needs to be added to the `--system-call-filter=` configuration you can use `strace`.  
 
 For example:
 ```
