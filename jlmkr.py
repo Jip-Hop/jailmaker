@@ -4,8 +4,8 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.4.1"
-
+__version__ = "1.4.2"
+__author__ = "Jip-Hop"
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
 
@@ -357,7 +357,9 @@ def passthrough_nvidia(
         nvidia_libraries = set(
             [
                 x
-                for x in subprocess.check_output(["nvidia-container-cli", "list", "--libraries"])
+                for x in subprocess.check_output(
+                    ["nvidia-container-cli", "list", "--libraries"]
+                )
                 .decode()
                 .split("\n")
                 if x
@@ -371,8 +373,7 @@ def passthrough_nvidia(
                     for x in subprocess.check_output(["nvidia-container-cli", "list"])
                     .decode()
                     .split("\n")
-                    if x
-                    and x not in nvidia_libraries
+                    if x and x not in nvidia_libraries
                 ]
             )
         )
@@ -503,6 +504,19 @@ def parse_config_file(jail_config_path):
         return
 
 
+def systemd_escape_path(path):
+    """
+    Escape path containing spaces, while properly handling backslashes in filenames.
+    https://manpages.debian.org/bookworm/systemd/systemd.syntax.7.en.html#QUOTING
+    https://manpages.debian.org/bookworm/systemd/systemd.service.5.en.html#COMMAND_LINES
+    """
+    return "".join(
+        map(
+            lambda char: "\s" if char == " " else "\\\\" if char == "\\" else char, path
+        )
+    )
+
+
 def add_hook(jail_path, systemd_run_additional_args, hook_command, hook_type):
     if not hook_command:
         return
@@ -520,7 +534,9 @@ def add_hook(jail_path, systemd_run_additional_args, hook_command, hook_type):
         print(hook_command, file=open(hook_file, "w"))
 
     stat_chmod(hook_file, 0o700)
-    systemd_run_additional_args += [f"--property={hook_type}={hook_file}"]
+    systemd_run_additional_args += [
+        f"--property={hook_type}={systemd_escape_path(hook_file)}"
+    ]
 
 
 def start_jail(jail_name):
@@ -1839,7 +1855,7 @@ def install_jailmaker():
                 f"Cannot create symlink because {symlink} is on a readonly filesystem."
             )
 
-    alias = f"alias jlmkr={shlex.quote(SCRIPT_PATH)} # managed by jailmaker"
+    alias = f"alias jlmkr='\"{SCRIPT_PATH}\"' # managed by jailmaker"
     alias_regex = re.compile(r"^\s*alias jlmkr=.*# managed by jailmaker\s*")
     shell_env = os.getenv("SHELL")
 
