@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "1.4.2"
+__version__ = "1.5.0"
 __author__ = "Jip-Hop"
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
@@ -62,6 +62,16 @@ pre_start_hook=
 #     modprobe br_netfilter
 #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
 #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
+
+# Specify command/script to run on the HOST after starting the jail
+# For example to attach to multiple bridge interfaces 
+# when using --network-veth-extra=ve-myjail-1:veth1
+post_start_hook=
+# post_start_hook=#!/usr/bin/bash
+#     set -euo pipefail
+#     echo 'POST_START_HOOK_EXAMPLE'
+#     ip link set dev ve-myjail-1 master br2
+#     ip link set dev ve-myjail-1 up
 
 # Specify a command/script to run on the HOST after stopping the jail
 post_stop_hook=
@@ -633,12 +643,19 @@ def start_jail(jail_name):
             "--capability=all",
         ]
 
-    # Add hooks to execute commands on the host before starting and after stopping a jail
+    # Add hooks to execute commands on the host before/after starting and after stopping a jail
     add_hook(
         jail_path,
         systemd_run_additional_args,
         config.my_get("pre_start_hook"),
         "ExecStartPre",
+    )
+
+    add_hook(
+        jail_path,
+        systemd_run_additional_args,
+        config.my_get("post_start_hook"),
+        "ExecStartPost",
     )
 
     add_hook(
@@ -1497,6 +1514,28 @@ def create_jail(**kwargs):
             """
                 ),
                 file=open(os.path.join(network_dir_path, "mv-dhcp.network"), "w"),
+            )
+
+            # Setup DHCP for veth-extra network interfaces
+            # This config applies when using the --network-veth-extra option of systemd-nspawn
+            # https://www.debian.org/doc/manuals/debian-reference/ch05.en.html#_the_modern_network_configuration_without_gui
+            print(
+                cleandoc(
+                    """
+                [Match]
+                Virtualization=container
+                Name=vee-*
+
+                [Network]
+                DHCP=yes
+                LinkLocalAddressing=ipv6
+
+                [DHCPv4]
+                UseDNS=true
+                UseTimezone=true
+            """
+                ),
+                file=open(os.path.join(network_dir_path, "vee-dhcp.network"), "w"),
             )
 
             # Override preset which caused systemd-networkd to be disabled (e.g. fedora 39)
