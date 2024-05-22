@@ -42,6 +42,28 @@ systemctl status systemd-networkd
 ifconfig
 ```
 
+### Multiple Bridge Interfaces
+[Systemd-nspawn](https://www.freedesktop.org/software/systemd/man/latest/systemd-nspawn.html), the technology on which jailmaker is built, [currently](https://github.com/systemd/systemd/issues/11087) only supports the definition and automatic configuration of a single bridge interface via the [`--network-bridge`](https://www.freedesktop.org/software/systemd/man/latest/systemd-nspawn.html#--network-bridge=) argument.  In some cases however, for instance when trying to utilize different vlan interfaces, it can be useful to configure multiple bridge interfaces within a jail.  It is possible to create extra interfaces and join them to host bridges manually with systemd-nspwan using a combination of the [`--network-veth-extra`](https://www.freedesktop.org/software/systemd/man/latest/systemd-nspawn.html#--network-veth-extra=) argument and a service config containing `ExecStartPost` commands as outlined [here](https://wiki.csclub.uwaterloo.ca/Systemd-nspawn#Multiple_network_interfaces).
+
+The `--network-veth-extra` argument instructs system-nspawn to create an addition linked interface between the host and jail and uses a syntax of
+```
+--network-veth-extra=<host_interface_name>:<jail_interface_name>
+```
+
+The service config constaining `ExecStartPost` commands is then used to add the host side of the interface link to an existing host bridge and bring the interface up.  Jailmaker has simplified this process by including a `post_start_hook` configuration parameter which can automate the creation of the service config by including the `ExecStartPost` commands as below.
+
+```
+post_start_hook=#!/usr/bin/bash
+    set -euo pipefail
+    echo 'POST_START_HOOK'
+    ip link set dev ve-docker-1 master br40
+    ip link set dev ve-docker-1 up
+    ip link set dev ve-docker-2 master br70
+    ip link set dev ve-docker-2 up
+```
+
+With the new `--network-veth-extra` interface link created and the host side added to an existing host bridge, the jail side of the link still needs to be configured.  Jailmaker provides a network file in the form of `/etc/systemd/network/vee-dhcp.network` which will automatically perform this configuration.  In order for `vee-dhcp.network` to successfully match and configure the link's jail side interface, the `<jail_interface_name>` must begin with a ***vee-*** prefix.  An example jailmaker config with properly named `--network-veth-extra` interfaces and `post_start_hook` commands is available [here](https://github.com/Jip-Hop/jailmaker/discussions/179#discussioncomment-9499289).
+
 ## Macvlan Networking
 
 Some services require the use of port 80 or 443, or would benefit from a separate IP. For these situations the easiest network configuration is the MAC VLAN configuration. This creates a virtual interface with its own separate randomly generated MAC address and IP. The default config uses DHCP by default, but can easily be set to a Static IP.
