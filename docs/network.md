@@ -50,7 +50,7 @@ The `--network-veth-extra` argument instructs system-nspawn to create an additio
 --network-veth-extra=<host_interface_name>:<jail_interface_name>
 ```
 
-The service config constaining `ExecStartPost` commands is then used to add the host side of the interface link to an existing host bridge and bring the interface up.  JailMaker has simplified this process by including a `post_start_hook` configuration parameter which can automate the creation of the service config by including the `ExecStartPost` commands as below.
+The service config constaining `ExecStartPost` commands is then used to add the host side of the interface link to an existing host bridge and bring the interface up.  Jailmaker has simplified this process by including a `post_start_hook` configuration parameter which can automate the creation of the service config by including the `ExecStartPost` commands as below.
 
 ```
 post_start_hook=#!/usr/bin/bash
