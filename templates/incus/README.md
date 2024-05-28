@@ -6,17 +6,17 @@
 
 ## Setup
 
-Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create --start --config /mnt/tank/path/to/incus/config myincusjail`.
+Check out the [config](./config) template file. You may provide it when asked during `./jlmkr.py create` or, if you have the template file stored on your NAS, you may provide it directly by running `./jlmkr.py create --start --config /mnt/tank/path/to/incus/config myincusjail`.
 
 We manually finish the setup by running the following after creating and starting the jail:
 
 ```bash
-jlmkr exec myincusjail bash -c 'incus admin init'
+./jlmkr.py exec myincusjail bash -c 'incus admin init'
 ```    
 
 Follow [First steps with Incus](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/).
 
-Then visit the Incus GUI inside the browser https://0.0.0.0:8443. To find out which IP address to use instead of 0.0.0.0, check the IP address for your jail with `jlmkr list`.
+Then visit the Incus GUI inside the browser https://0.0.0.0:8443. To find out which IP address to use instead of 0.0.0.0, check the IP address for your jail with `./jlmkr.py list`.
 
 ## Known Issues
 

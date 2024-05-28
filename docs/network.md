@@ -91,7 +91,7 @@ DHCP=false
 Address=192.168.X.XXX/24
 Gateway=192.168.X.X
 ```
-Then restart the network interface inside the jail `systemctl restart systemd-networkd` or restart the jail by running `jlmkr stop JAILNAME && jlmkr start JAILNAME` from the TrueNAS shell. Use `ifconfig` to verify the interface is up and has the correct IP.
+Then restart the network interface inside the jail `systemctl restart systemd-networkd` or restart the jail by running `./jlmkr.py stop JAILNAME && ./jlmkr.py start JAILNAME` from the TrueNAS shell. Use `ifconfig` to verify the interface is up and has the correct IP.
 
 ## DNS via DHCP
 

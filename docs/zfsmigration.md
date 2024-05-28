@@ -11,9 +11,9 @@ Jailmaker operates in dual-mode: it supports using both directories and datasets
 
 #### Stop all jails
 
-`jlmkr stop jail1`
+`./jlmkr.py stop jail1`
 
-`jlmkr stop jail2`
+`./jlmkr.py stop jail2`
 etc..
 
 #### Move/rename the 'jailmaker' directory
@@ -56,6 +56,6 @@ Warning! It's important that both directories have the `/` at the end to make su
 
 #### Test everything works
 
-If everything works, you should be able to use the `jlmkr` command directly. Try doing a `jlmkr list` to check if the jails are correctly recognized
+If everything works, you should be able to use the `./jlmkr.py` command directly. Try doing a `./jlmkr.py list` to check if the jails are correctly recognized
 
 You can also try creating a new jail and see that the dataset is created automatically.
