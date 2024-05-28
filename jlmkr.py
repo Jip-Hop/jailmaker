@@ -12,7 +12,6 @@ IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
 import argparse
 import configparser
 import contextlib
-import ctypes
 import hashlib
 import io
 import json
@@ -1166,32 +1165,10 @@ def interactive_config():
             )
         )
 
-        # Enable tab auto completion of file paths after the = symbol
-        readline.set_completer_delims("=")
-        readline.parse_and_bind("tab: complete")
-
-        readline_lib = ctypes.CDLL(readline.__file__)
-        rl_completer_quote_characters = ctypes.c_char_p.in_dll(
-            readline_lib, "rl_completer_quote_characters"
-        )
-
-        # Let the readline library know about quote characters for completion
-        rl_completer_quote_characters.value = "\"'".encode("utf-8")
-
-        # TODO: more robust tab completion of file paths with space or = character
-        # Currently completing these only works when the path is quoted
-        # https://thoughtbot.com/blog/tab-completion-in-gnu-readline
-        # https://stackoverflow.com/a/67118744
-        # https://github.com/python-cmd2/cmd2/blob/ee7599f9ac0dbb6ce3793f6b665ba1200d3ef9a3/cmd2/cmd2.py
-        # https://stackoverflow.com/a/40152927
-
         config.my_set(
             "systemd_nspawn_user_args",
             "\n    ".join(shlex.split(input("Additional flags: ") or "")),
         )
-
-        # Disable tab auto completion
-        readline.parse_and_bind("tab: self-insert")
 
         print(
             dedent(
