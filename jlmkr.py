@@ -13,8 +13,6 @@ import argparse
 import configparser
 import contextlib
 import ctypes
-import errno
-import glob
 import hashlib
 import io
 import json
@@ -38,8 +36,6 @@ from textwrap import dedent
 DEFAULT_CONFIG = """startup=0
 gpu_passthrough_intel=0
 gpu_passthrough_nvidia=0
-# The docker_compatible option is deprecated and will be removed in a future release
-docker_compatible=0
 # Turning off seccomp filtering improves performance at the expense of security
 seccomp=1
 
@@ -128,7 +124,7 @@ SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
-SYMLINK_NAME = "jlmkr"
+SHORTNAME = "jlmkr"
 
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
@@ -337,7 +333,7 @@ def passthrough_nvidia(
 ):
     jail_rootfs_path = get_jail_rootfs_path(jail_name)
     ld_so_conf_path = Path(
-        os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SYMLINK_NAME}-nvidia.conf"
+        os.path.join(jail_rootfs_path), f"etc/ld.so.conf.d/{SHORTNAME}-nvidia.conf"
     )
 
     if not gpu_passthrough_nvidia:
@@ -480,7 +476,7 @@ def status_jail(jail_name):
     """
     # Alternatively `machinectl status jail_name` could be used
     return subprocess.run(
-        ["systemctl", "status", f"{SYMLINK_NAME}-{jail_name}"]
+        ["systemctl", "status", f"{SHORTNAME}-{jail_name}"]
     ).returncode
 
 
@@ -489,7 +485,7 @@ def log_jail(jail_name):
     Show the log file of the jail with given name.
     """
     return subprocess.run(
-        ["journalctl", "-u", f"{SYMLINK_NAME}-{jail_name}"]
+        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}"]
     ).returncode
 
 
@@ -574,7 +570,7 @@ def start_jail(jail_name):
     seccomp = config.my_getboolean("seccomp")
 
     systemd_run_additional_args = [
-        f"--unit={SYMLINK_NAME}-{jail_name}",
+        f"--unit={SHORTNAME}-{jail_name}",
         f"--working-directory=./{jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
@@ -602,47 +598,6 @@ def start_jail(jail_name):
     # Or pull docker images containing device nodes:
     # docker pull oraclelinux@sha256:d49469769e4701925d5145c2676d5a10c38c213802cf13270ec3a12c9c84d643
 
-    if config.my_getboolean("docker_compatible"):
-        eprint("WARNING: DEPRECATED OPTION")
-        eprint(
-            "The `docker_compatible` option is deprecated and will be removed in a future release."
-        )
-        eprint("Please refer to the recommended way to run docker in a jail:")
-        eprint("https://github.com/Jip-Hop/jailmaker/tree/main/templates/docker")
-        # Enable ip forwarding on the host (docker needs it)
-        print(1, file=open("/proc/sys/net/ipv4/ip_forward", "w"))
-
-        # Load br_netfilter kernel module and enable bridge-nf-call to fix warning when running docker info:
-        # WARNING: bridge-nf-call-iptables is disabled
-        # WARNING: bridge-nf-call-ip6tables is disabled
-        #
-        # If we are using Apps then this should already be enabled
-        # May cause "guest container traffic to be blocked by iptables rules that are intended for the host"
-        # https://unix.stackexchange.com/q/720105/477308
-        # https://github.com/moby/moby/issues/24809
-        # https://docs.oracle.com/en/operating-systems/oracle-linux/docker/docker-KnownIssues.html#docker-issues
-        # https://wiki.libvirt.org/page/Net.bridge.bridge-nf-call_and_sysctl.conf
-        # https://serverfault.com/questions/963759/docker-breaks-libvirt-bridge-network
-
-        if subprocess.run(["modprobe", "br_netfilter"]).returncode == 0:
-            print(1, file=open("/proc/sys/net/bridge/bridge-nf-call-iptables", "w"))
-            print(1, file=open("/proc/sys/net/bridge/bridge-nf-call-ip6tables", "w"))
-        else:
-            eprint(
-                dedent(
-                    """
-                Failed to load br_netfilter kernel module."""
-                )
-            )
-
-        print("The `docker_compatible` option disables seccomp filtering...")
-        seccomp = False
-
-        # Add additional flags required for docker
-        systemd_nspawn_additional_args += [
-            "--capability=all",
-        ]
-
     # Add hooks to execute commands on the host before/after starting and after stopping a jail
     add_hook(
         jail_path,
@@ -665,20 +620,8 @@ def start_jail(jail_name):
         "ExecStopPost",
     )
 
-    # Legacy gpu_passthrough config setting
-    if config.my_getboolean("gpu_passthrough", False):
-        eprint("WARNING: DEPRECATED OPTION")
-        eprint(
-            "The `gpu_passthrough` option is deprecated and will be removed in a future release."
-        )
-        eprint(
-            "Please use `gpu_passthrough_intel` and/or `gpu_passthrough_nvidia` instead."
-        )
-        gpu_passthrough_intel = True
-        gpu_passthrough_nvidia = True
-    else:
-        gpu_passthrough_intel = config.my_getboolean("gpu_passthrough_intel")
-        gpu_passthrough_nvidia = config.my_getboolean("gpu_passthrough_nvidia")
+    gpu_passthrough_intel = config.my_getboolean("gpu_passthrough_intel")
+    gpu_passthrough_nvidia = config.my_getboolean("gpu_passthrough_nvidia")
 
     passthrough_intel(gpu_passthrough_intel, systemd_nspawn_additional_args)
     passthrough_nvidia(
@@ -759,7 +702,7 @@ def start_jail(jail_name):
                 f"""
             Failed to start jail {jail_name}...
             In case of a config error, you may fix it with:
-            {SYMLINK_NAME} edit {jail_name}
+            {COMMAND_NAME} edit {jail_name}
         """
             )
         )
@@ -1253,7 +1196,7 @@ def interactive_config():
         print(
             dedent(
                 f"""
-            The `{COMMAND_NAME} startup` command can automatically ensure {COMMAND_NAME} is installed properly and start a selection of jails.
+            The `{COMMAND_NAME} startup` command can automatically start a selection of jails.
             This comes in handy when you want to automatically start multiple jails after booting TrueNAS SCALE (e.g. from a Post Init Script).
         """
             )
@@ -1324,7 +1267,7 @@ def create_jail(**kwargs):
             # TODO: fallback to default values for e.g. distro and release if they are not in the config file
             print(f"Creating jail {jail_name} from config template {jail_config_path}.")
             if jail_config_path not in config.read(jail_config_path):
-                eprint(f"Failed to read config config template {jail_config_path}.")
+                eprint(f"Failed to read config template {jail_config_path}.")
                 return 1
         else:
             print(f"Creating jail {jail_name} with default config.")
@@ -1334,7 +1277,6 @@ def create_jail(**kwargs):
 
         for option in [
             "distro",
-            "docker_compatible",
             "gpu_passthrough_intel",
             "gpu_passthrough_nvidia",
             "release",
@@ -1358,9 +1300,9 @@ def create_jail(**kwargs):
             print(
                 dedent(
                     f"""
-                    TIP: Run `{SYMLINK_NAME} create` without any arguments for interactive config.
+                    TIP: Run `{COMMAND_NAME} create` without any arguments for interactive config.
                     Or use CLI args to override the default options.
-                    For more info, run: `{SYMLINK_NAME} create --help`
+                    For more info, run: `{COMMAND_NAME} create --help`
                   """
                 )
             )
@@ -1739,14 +1681,8 @@ def list_jails():
         config = parse_config_file(get_jail_config_path(jail_name))
         if config:
             jail["startup"] = config.my_getboolean("startup")
-
-            # TODO: remove gpu_passthrough in future release
-            if config.my_getboolean("gpu_passthrough", False):
-                jail["gpu_intel"] = True
-                jail["gpu_nvidia"] = True
-            else:
-                jail["gpu_intel"] = config.my_getboolean("gpu_passthrough_intel")
-                jail["gpu_nvidia"] = config.my_getboolean("gpu_passthrough_nvidia")
+            jail["gpu_intel"] = config.my_getboolean("gpu_passthrough_intel")
+            jail["gpu_nvidia"] = config.my_getboolean("gpu_passthrough_nvidia")
 
         if jail_name in running_machines:
             machine = running_machines[jail_name]
@@ -1795,133 +1731,7 @@ def list_jails():
     return 0
 
 
-def replace_or_add_string(file_path, regex, replacement_string):
-    """
-    Replace all occurrences of a regular expression in a file with a given string.
-    Add the string to the end of the file if regex doesn't match.
-
-    Args:
-        file_path (str): The path to the file.
-        regex (str): The regular expression to search for.
-        replacement_string (str): The string to replace the matches with.
-    """
-
-    with open(file_path, "a+") as f:
-        f.seek(0)
-
-        updated = False
-        found = False
-        new_text = ""
-        replacement_line = f"{replacement_string}\n"
-
-        for line in f:
-            if not re.match(regex, line):
-                new_text += line
-                continue
-
-            found = True
-            new_text += replacement_line
-
-            if replacement_line != line:
-                updated = True
-
-        if not new_text.strip():
-            # In case of an empty file just write the replacement_string
-            new_text = replacement_line
-            updated = True
-        elif not found:
-            # Add a newline to the end of the file in case it's not there
-            if not new_text.endswith("\n"):
-                new_text += "\n"
-            # Then add our replacement_string to the end of the file
-            new_text += replacement_line
-            updated = True
-
-        # Only overwrite in case there are change to the file
-        if updated:
-            f.seek(0)
-            f.truncate()
-            f.write(new_text)
-            return True
-
-    return False
-
-
-def install_jailmaker():
-    # Check if command exists in path
-    if shutil.which("systemd-nspawn"):
-        print("systemd-nspawn is already installed.")
-    else:
-        print("Installing jailmaker dependencies...")
-
-        original_permissions = {}
-
-        print(
-            "Temporarily enable apt and dpkg (if not already enabled) to install systemd-nspawn."
-        )
-
-        # Make /bin/apt* and /bin/dpkg* files executable
-        for file in glob.glob("/bin/apt*") + (glob.glob("/bin/dpkg*")):
-            original_permissions[file] = os.stat(file).st_mode
-            stat_chmod(file, 0o755)
-
-        subprocess.run(["apt-get", "update"], check=True)
-        subprocess.run(["apt-get", "install", "-y", "systemd-container"], check=True)
-
-        # Restore original permissions
-        print("Restore permissions of apt and dpkg.")
-
-        for file, original_permission in original_permissions.items():
-            stat_chmod(file, original_permission)
-
-    symlink = f"/usr/local/sbin/{SYMLINK_NAME}"
-
-    if os.path.lexists(symlink) and not os.path.islink(symlink):
-        print(
-            f"Unable to create symlink at {symlink}. File already exists but is not a symlink."
-        )
-    # Check if the symlink is already pointing to the desired destination
-    elif os.path.realpath(symlink) != SCRIPT_PATH:
-        try:
-            Path(symlink).unlink(missing_ok=True)
-            os.symlink(SCRIPT_PATH, symlink)
-            print(f"Created symlink {symlink} to {SCRIPT_PATH}.")
-        except OSError as e:
-            if e.errno != errno.EROFS:
-                raise e
-
-            print(
-                f"Cannot create symlink because {symlink} is on a readonly filesystem."
-            )
-
-    alias = f"alias jlmkr='\"{SCRIPT_PATH}\"' # managed by jailmaker"
-    alias_regex = re.compile(r"^\s*alias jlmkr=.*# managed by jailmaker\s*")
-    shell_env = os.getenv("SHELL")
-
-    for shell_type in ["bash", "zsh"]:
-        file = "/root/.bashrc" if shell_type == "bash" else "/root/.zshrc"
-
-        if replace_or_add_string(file, alias_regex, alias):
-            print(f"Created {shell_type} alias {SYMLINK_NAME}.")
-            if shell_env.endswith(shell_type):
-                print(
-                    f"Please source {file} manually for the {SYMLINK_NAME} alias to become effective immediately."
-                )
-        else:
-            print(f"The {shell_type} alias {SYMLINK_NAME} is already present.")
-
-    print("Done installing jailmaker.")
-
-    return 0
-
-
 def startup_jails():
-    returncode = install_jailmaker()
-
-    if returncode != 0:
-        eprint("Failed to install jailmaker. Abort startup.")
-        return returncode
-
     start_failure = False
     for jail_name in get_all_jail_names():
         config = parse_config_file(get_jail_config_path(jail_name))
@@ -2011,11 +1821,6 @@ def main():
             func=run_lxc_download_script,
         ),
         dict(
-            name="install",
-            help="install jailmaker dependencies and create symlink",
-            func=install_jailmaker,
-        ),
-        dict(
             name="list",  #
             help="list jails",
             func=list_jails,
@@ -2048,7 +1853,7 @@ def main():
         ),
         dict(
             name="startup",
-            help=f"install {SYMLINK_NAME} and startup selected jails",
+            help="startup selected jails",
             func=startup_jails,
         ),
         dict(
@@ -2096,12 +1901,6 @@ def main():
         type=int,
         choices=[0, 1],
         help=f"start this jail when running: {SCRIPT_NAME} startup",
-    )
-    commands["create"].add_argument(
-        "--docker_compatible",  #
-        type=int,
-        choices=[0, 1],
-        help="DEPRECATED",
     )
     commands["create"].add_argument(
         "--seccomp",  #

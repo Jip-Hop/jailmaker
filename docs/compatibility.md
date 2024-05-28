@@ -4,7 +4,7 @@
 |   |   |
 |---|---|
 |TrueNAS Core|❌|
-|TrueNAS 22.12|✅|
+|TrueNAS 22.12|❌|
 |TrueNAS 23.10|✅|
 |TrueNAS 24.04|✅|
 
