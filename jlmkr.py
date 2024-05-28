@@ -6,6 +6,8 @@ thanks to systemd-nspawn!"""
 
 __version__ = "1.5.0"
 __author__ = "Jip-Hop"
+__copyright__ = "Copyright (C) 2023, Jip-Hop"
+__license__ = "LGPL-3.0-only"
 __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
 
