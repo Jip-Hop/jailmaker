@@ -6,17 +6,17 @@
 
 ## Setup
 
-Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create --start --config /mnt/tank/path/to/lxd/config mylxdjail`.
+Check out the [config](./config) template file. You may provide it when asked during `./jlmkr.py create` or, if you have the template file stored on your NAS, you may provide it directly by running `./jlmkr.py create --start --config /mnt/tank/path/to/lxd/config mylxdjail`.
 
 We manually finish the setup by running the command below after creating and starting the jail. Choose the `dir` storage backend during `lxd init` and answer `yes` to "Would you like the LXD server to be available over the network?"
 
 ```bash
-jlmkr exec mylxdjail bash -c 'lxd init &&
+./jlmkr.py exec mylxdjail bash -c 'lxd init &&
     snap set lxd ui.enable=true &&
     systemctl reload snap.lxd.daemon'
 ```
 
-Then visit the `lxd` GUI inside the browser https://0.0.0.0:8443. To find out which IP address to use instead of 0.0.0.0, check the IP address for your jail with `jlmkr list`.
+Then visit the `lxd` GUI inside the browser https://0.0.0.0:8443. To find out which IP address to use instead of 0.0.0.0, check the IP address for your jail with `./jlmkr.py list`.
 
 ## Known Issues
 

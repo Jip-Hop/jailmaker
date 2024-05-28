@@ -2,7 +2,7 @@
 
 ## Setup
 
-Check out the [config](./config) template file. You may provide it when asked during `jlmkr create` or, if you have the template file stored on your NAS, you may provide it directly by running `jlmkr create --start --config /mnt/tank/path/to/podman/config mypodmanjail`.
+Check out the [config](./config) template file. You may provide it when asked during `./jlmkr.py create` or, if you have the template file stored on your NAS, you may provide it directly by running `./jlmkr.py create --start --config /mnt/tank/path/to/podman/config mypodmanjail`.
 
 ## Rootless
 
@@ -14,11 +14,11 @@ Check out the [config](./config) template file. You may provide it when asked du
 
 Prerequisites: created a jail using the [config](./config) template file.
 
-Run `jlmkr edit mypodmanjail` and add `--private-users=524288:65536 --private-users-ownership=chown` to `systemd_nspawn_user_args`. We start at UID 524288, as this is the [systemd range used for containers](https://github.com/systemd/systemd/blob/main/docs/UIDS-GIDS.md#summary).
+Run `./jlmkr.py edit mypodmanjail` and add `--private-users=524288:65536 --private-users-ownership=chown` to `systemd_nspawn_user_args`. We start at UID 524288, as this is the [systemd range used for containers](https://github.com/systemd/systemd/blob/main/docs/UIDS-GIDS.md#summary).
 
 The `--private-users-ownership=chown` option will ensure the rootfs ownership is corrected.
 
-After the jail has started run `jlmkr stop mypodmanjail && jlmkr edit mypodmanjail`, remove `--private-users-ownership=chown` and increase the UID range to `131072` to double the number of UIDs available in the jail. We need more than 65536 UIDs available in the jail, since rootless podman also needs to be able to map UIDs. If I leave the `--private-users-ownership=chown` option I get the following error:
+After the jail has started run `./jlmkr.py stop mypodmanjail && ./jlmkr.py edit mypodmanjail`, remove `--private-users-ownership=chown` and increase the UID range to `131072` to double the number of UIDs available in the jail. We need more than 65536 UIDs available in the jail, since rootless podman also needs to be able to map UIDs. If I leave the `--private-users-ownership=chown` option I get the following error:
 
 > systemd-nspawn[678877]: Automatic UID/GID adjusting is only supported for UID/GID ranges starting at multiples of 2^16 with a range of 2^16
 
@@ -31,7 +31,7 @@ systemd_nspawn_user_args=--network-macvlan=eno1
     --private-users=524288:131072
 ```
 
-Start the jail with `jlmkr start mypodmanjail` and open a shell session inside the jail (as the remapped root user) with `jlmkr shell mypodmanjail`.
+Start the jail with `./jlmkr.py start mypodmanjail` and open a shell session inside the jail (as the remapped root user) with `./jlmkr.py shell mypodmanjail`.
 
 Then inside the jail setup the new rootless user:
 
@@ -61,7 +61,7 @@ exit
 From the TrueNAS host, open a shell as the rootless user inside the jail.
 
 ```bash
-jlmkr shell --uid 1000 mypodmanjail
+./jlmkr.py shell --uid 1000 mypodmanjail
 ```
 
 Run rootless podman as user 1000.
@@ -97,7 +97,7 @@ Add `sysctl net.ipv4.ip_unprivileged_port_start=23` to the `pre_start_hook` insi
 Install and enable cockpit:
 
 ```bash
-jlmkr exec mypodmanjail bash -c "dnf -y install cockpit cockpit-podman && \
+./jlmkr.py exec mypodmanjail bash -c "dnf -y install cockpit cockpit-podman && \
   systemctl enable --now cockpit.socket && \
   ip a &&
   ip route | awk '/default/ { print \$9 }'"
@@ -108,7 +108,7 @@ Check the IP address of the jail and access the Cockpit web interface at https:/
 If you've setup the `rootless` user, you may login with the password you've created earlier. Otherwise you'd have to add an admin user first:
 
 ```bash
-jlmkr exec podmantest bash -c 'adduser admin
+./jlmkr.py exec podmantest bash -c 'adduser admin
 passwd admin
 usermod -aG wheel admin'
 ```

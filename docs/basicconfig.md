@@ -52,7 +52,7 @@ See [Networking](./network.md)
 
 ### Colorized bash prompt
 
-To visually distinguish between a root shell inside the jail and a root shell outside the jail, it's possible to colorize the shell prompt. When using a debian jail with the bash shell, you may run the following command **inside the jail** to get a yellow prompt inside the jail (will be activated the next time you run `jlmkr shell myjail`):
+To visually distinguish between a root shell inside the jail and a root shell outside the jail, it's possible to colorize the shell prompt. When using a debian jail with the bash shell, you may run the following command **inside the jail** to get a yellow prompt inside the jail (will be activated the next time you run `./jlmkr.py shell myjail`):
 
 ```bash
 echo "PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '" >> ~/.bashrc
