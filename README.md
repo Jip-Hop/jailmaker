@@ -38,7 +38,7 @@ The `jlmkr.py` script (and the jails + config it creates) are now stored on the 
 Optionally you may create a shell alias for the currently logged in (admin) user to conveniently run `jlmkr.py` without having to change into the `jailmaker` directory or specify the full absolute path. I suggest to create the `jlmkr` alias like this:
 
 ```shell
-echo "alias jlmkr=\"sudo '/mnt/mypool/jailmaker/jlmkr.py'\"" > ~/.bashrc
+echo "alias jlmkr=\"sudo '/mnt/mypool/jailmaker/jlmkr.py'\"" >> ~/.bashrc
 ```
 
 Please replace `/mnt/mypool/jailmaker/` with the actual path to where you stored `jlmkr.py`. If you're using zsh instead of bash, then you should replace `.bashrc` in the command above with `.zshrc`. If you've created the alias, you may use it instead of `./jlmkr.py`.
