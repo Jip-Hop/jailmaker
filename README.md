@@ -43,6 +43,8 @@ echo "alias jlmkr=\"sudo '/mnt/mypool/jailmaker/jlmkr.py'\"" > ~/.bashrc
 
 Please replace `/mnt/mypool/jailmaker/` with the actual path to where you stored `jlmkr.py`. If you're using zsh instead of bash, then you should replace `.bashrc` in the command above with `.zshrc`. If you've created the alias, you may use it instead of `./jlmkr.py`.
 
+The alias will be available the next time you load the shell, but to use the alias immediately you can `source ~/.bashrc` or `source ~/.zshrc`, as appropriate.
+
 ## Usage
 
 ### Create Jail
