@@ -57,7 +57,7 @@ initial_setup=#!/usr/bin/bash
     set -euo pipefail
 
     # Install dependencies
-    apt install curl jq git -y
+    apt update && apt install curl jq git -y
 
     # Setup helm and k3s
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
