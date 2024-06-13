@@ -5,22 +5,22 @@ gpu_passthrough_nvidia=0
 seccomp=1
 
 # Use macvlan networking to provide an isolated network namespace,
-# so docker can manage firewall rules
+# so kubernetes can manage firewall rules
 # Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 # For k3s we allow the use of keyrings and cgroups, 
-# Also allow capability perf_event_open for tools like intel_gpu_top.
+# You should add capability perf_event_open for tools like intel_gpu_top.
 # A bind mount is used to give k3s access to circular message buffer (/dev/kmsg)
 systemd_nspawn_user_args=--network-macvlan=eno1
     --resolv-conf=bind-host
-    --system-call-filter='add_key keyctl bpf perf_event_open'
+    --system-call-filter='add_key keyctl bpf'
     --bind=/dev/kmsg
     # You can mount additional paths/devices like this:
     # --bind=/dev/ttyUSB0
 
 # Script to run on the HOST before starting the jail
-# Load kernel module and config kernel settings required for docker
+# Load kernel module and config kernel settings required for k8s/containerd
 pre_start_hook=#!/usr/bin/bash
     set -euo pipefail
     echo 'PRE_START_HOOK'
@@ -51,10 +51,8 @@ pre_start_hook=#!/usr/bin/bash
 distro=debian
 release=bookworm
 
-# Install docker inside the jail:
-# https://docs.docker.com/engine/install/debian/#install-using-the-repository
-# Will also install the NVIDIA Container Toolkit if gpu_passthrough_nvidia=1 during initial setup
-# https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+# Install k3s, dependencies, helm and kubecolor inside jail 
+# https://docs.k3s.io/quick-start
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
 

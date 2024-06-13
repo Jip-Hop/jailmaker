@@ -1,4 +1,4 @@
-# Debian Docker Jail Template
+# Debian k3s Jail Template
 
 ## Setup
 
