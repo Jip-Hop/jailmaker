@@ -57,14 +57,13 @@ initial_setup=#!/usr/bin/bash
     set -euo pipefail
 
     # Install dependencies
-    apt update && apt install curl jq git -y
+    apt-get update && apt-get install curl jq git -y
 
     # Setup helm and k3s
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
     curl -sfL https://get.k3s.io | \
-    INSTALL_K3S_CHANNEL=latest sh -s - server --cluster-init \
-    --kubelet-arg="allowed-unsafe-sysctls=net.ipv4.conf.*"
-    apt install kubecolor -y
+    INSTALL_K3S_CHANNEL=latest sh -s - server --cluster-init 
+    apt-get install kubecolor -y
     kubectl version
 
     # Optional: Enable Intel HW Acceleration for Plex, Jellyfin, Frigate etc. 
