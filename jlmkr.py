@@ -714,7 +714,7 @@ def start_jail(jail_name):
     if initial_setup:
         print("About to run the initial setup.")
         print("Waiting for networking in the jail to be ready.")
-        print("Please wait (this may take 90s in case of bridge networking)...")
+        print("Please wait (this may take 90s in case of bridge networking with STP is enabled)...")
         returncode = exec_jail(
             jail_name,
             [

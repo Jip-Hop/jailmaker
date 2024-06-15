@@ -14,7 +14,7 @@ The above YouTube video may be helpful when setting up the bridge interface.
 
 ### Bridge Flaws
 
-This type of interface takes much longer to set up both in complexity and wait time (you may have to be patient for up to 60 seconds after the jail started for networking to work, [assigning the IP address via DHCP is somehow slow](https://github.com/Jip-Hop/jailmaker/issues/7)). Furthermore, if the configuration is not correct it can render your TrueNAS inaccessible via ssh or the web interface, necessitating a reset using a keyboard and monitor plugged into the TrueNAS server and use `/etc/netcli` to reset the networking interface.
+This type of interface takes much longer to set up both in complexity and wait time (you may have to be patient for up to 90 seconds after the jail started for networking to work, [assigning the IP address via DHCP is slow by default because STP is enabled](https://github.com/Jip-Hop/jailmaker/issues/90#issuecomment-2162032080)). Furthermore, if the configuration is not correct it can render your TrueNAS inaccessible via ssh or the web interface, necessitating a reset using a keyboard and monitor plugged into the TrueNAS server and use `/etc/netcli` to reset the networking interface.
 
 ### Bridge Setup
 
