@@ -65,6 +65,10 @@ Could this be the same issue as [Instance creation failed](#instance-creation-fa
 
 Refer to the [Incus README](../incus/README.md) as a lot of it applies to LXD too.
 
+## Ideas
+
+Instead of installing `snapd` and `lxd` from the `initial_setup` script, it's possible to install [the `lxd-installer` package](https://packages.ubuntu.com/noble/lxd-installer) instead, which is a wrapper to install the lxd snap on demand. This can be done on a rootfs which is not booted (e.g. in a chroot, dockerfile, or with `systemd-nspawn` without the `--boot` flag). Another option is to use [a cloud variant image from linuxcontainers.org](https://images.linuxcontainers.org) or [other sources](https://cloud-images.ubuntu.com/noble/current/) as I think they already include lxd. These images als come with `cloud-init`, which is a standardized way to customize a container (or VM) during the first boot. Benefit of using that would be a standardized way to customize the image rootfs. Downside could be more bloated images as it depends on Python and more.
+
 ## References
 
 - [Running QEMU/KVM Virtual Machines in Unprivileged LXD Containers](https://dshcherb.github.io/2017/12/04/qemu-kvm-virtual-machines-in-unprivileged-lxd.html)

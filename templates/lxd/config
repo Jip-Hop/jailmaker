@@ -33,7 +33,7 @@ pre_start_hook=#!/usr/bin/bash
 
 # Only used while creating the jail
 distro=ubuntu
-release=jammy
+release=noble
 
 initial_setup=#!/usr/bin/bash
     set -euo pipefail
