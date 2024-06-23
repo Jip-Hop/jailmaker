@@ -4,7 +4,7 @@ gpu_passthrough_nvidia=0
 # Turning off seccomp filtering improves performance at the expense of security
 seccomp=1
 
-# Use macvlan networking to provide an isolated network namespace,
+# Use bridge networking to provide an isolated network namespace,
 # so docker can manage firewall rules
 # Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use

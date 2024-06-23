@@ -6,7 +6,7 @@ gpu_passthrough_nvidia=0
 # TODO: don't disable seccomp but specify which syscalls should be allowed
 seccomp=0
 
-# Use macvlan networking to provide an isolated network namespace,
+# Use bridge networking to provide an isolated network namespace,
 # so lxd can manage firewall rules
 # Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change eno1/br1 to the interface name you want to use
