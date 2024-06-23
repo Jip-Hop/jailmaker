@@ -775,7 +775,12 @@ def cleanup(jail_path):
         # Should be fixed in Python 3.13 https://stackoverflow.com/a/70549000
         def _onerror(func, path, exc_info):
             exc_type, exc_value, exc_traceback = exc_info
-            if not issubclass(exc_type, FileNotFoundError):
+            if issubclass(exc_type, PermissionError):
+                # Update the file permissions with the immutable and append-only bit cleared
+                subprocess.run(["chattr", "-i", "-a", path])
+                # Reattempt the removal
+                func(path)
+            elif not issubclass(exc_type, FileNotFoundError):
                 raise exc_value
 
         eprint(f"Cleaning up: {jail_path}.")
