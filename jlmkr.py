@@ -1379,9 +1379,10 @@ def create_jail(**kwargs):
             config.my_set("startup", 0)
             start_now = False
 
+        # Remove config which systemd handles for us
         with contextlib.suppress(FileNotFoundError):
-            # Remove config which systemd handles for us
             os.remove(os.path.join(jail_rootfs_path, "etc/machine-id"))
+        with contextlib.suppress(FileNotFoundError):
             os.remove(os.path.join(jail_rootfs_path, "etc/resolv.conf"))
 
         # https://github.com/systemd/systemd/issues/852
