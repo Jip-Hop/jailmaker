@@ -125,8 +125,6 @@ SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
-INITIAL_ROOT = os.open("/", os.O_PATH)
-CWD_BEFORE_CHROOT = None
 SHORTNAME = "jlmkr"
 
 # Only set a color if we have an interactive tty
@@ -281,6 +279,25 @@ class CustomSubParser(argparse.ArgumentParser):
             raise ExceptionWithParser(self, message)
 
 
+class Chroot:
+    def __init__(self, new_root):
+        self.new_root = new_root
+        self.old_root = None
+        self.initial_cwd = None
+
+    def __enter__(self):
+        self.old_root = os.open("/", os.O_PATH)
+        self.initial_cwd = os.path.abspath(os.getcwd())
+        os.chdir(self.new_root)
+        os.chroot(".")
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.old_root)
+        os.chroot(".")
+        os.close(self.old_root)
+        os.chdir(self.initial_cwd)
+
+
 def eprint(*args, **kwargs):
     """
     Print to stderr.
@@ -294,20 +311,6 @@ def fail(*args, **kwargs):
     """
     eprint(*args, **kwargs)
     sys.exit(1)
-
-
-def enter_chroot(new_root):
-    global CWD_BEFORE_CHROOT
-    CWD_BEFORE_CHROOT = os.path.abspath(os.getcwd())
-    os.chdir(new_root)
-    os.chroot(".")
-
-
-# https://stackoverflow.com/a/61533559
-def exit_chroot():
-    os.chdir(INITIAL_ROOT)
-    os.chroot(".")
-    os.chdir(CWD_BEFORE_CHROOT)
 
 
 def get_jail_path(jail_name):
@@ -787,6 +790,7 @@ def cleanup(jail_path):
     """
     Cleanup jail.
     """
+
     if get_zfs_dataset(jail_path):
         eprint(f"Cleaning up: {jail_path}.")
         remove_zfs_dataset(jail_path)
@@ -1373,9 +1377,9 @@ def create_jail(**kwargs):
         # But alpine jails made with jailmaker have other issues
         # They don't shutdown cleanly via systemctl and machinectl...
 
-        enter_chroot(jail_rootfs_path)
-        init_system_name = os.path.basename(os.path.realpath("/sbin/init"))
-        exit_chroot()
+        with Chroot(jail_rootfs_path):
+            # Use chroot to correctly resolve absolute /sbin/init symlink
+            init_system_name = os.path.basename(os.path.realpath("/sbin/init"))
 
         if (
             init_system_name != "systemd"
@@ -1645,20 +1649,20 @@ def get_all_jail_names():
     return jail_names
 
 
-def parse_os_release(new_rootfs):
-    enter_chroot(new_rootfs)
+def parse_os_release(new_root):
     result = {}
-    for candidate in ["/etc/os-release", "/usr/lib/os-release"]:
-        try:
-            with open(candidate, encoding="utf-8") as f:
-                # TODO: can I create a solution which not depends on the internal _parse_os_release method?
-                result = platform._parse_os_release(f)
-                break
-        except OSError:
-            # Silently ignore failing to read os release info
-            pass
+    with Chroot(new_root):
+        # Use chroot to correctly resolve os-release symlink (for nixos)
+        for candidate in ["/etc/os-release", "/usr/lib/os-release"]:
+            try:
+                with open(candidate, encoding="utf-8") as f:
+                    # TODO: can I create a solution which not depends on the internal _parse_os_release method?
+                    result = platform._parse_os_release(f)
+                    break
+            except OSError:
+                # Silently ignore failing to read os release info
+                pass
 
-    exit_chroot()
     return result
 
 
