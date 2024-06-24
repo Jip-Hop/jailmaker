@@ -1373,11 +1373,12 @@ def create_jail(**kwargs):
         # But alpine jails made with jailmaker have other issues
         # They don't shutdown cleanly via systemctl and machinectl...
 
+        enter_chroot(jail_rootfs_path)
+        init_system_name = os.path.basename(os.path.realpath("/sbin/init"))
+        exit_chroot()
+
         if (
-            os.path.basename(
-                os.path.realpath(os.path.join(jail_rootfs_path, "sbin/init"))
-            )
-            != "systemd"
+            init_system_name != "systemd"
         ):
             print(
                 dedent(
