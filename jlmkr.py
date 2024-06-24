@@ -1289,7 +1289,7 @@ def create_jail(**kwargs):
             print(
                 dedent(
                     f"""
-                    TIP: Run `{COMMAND_NAME} create` without any arguments for interactive config.
+                    Hint: run `{COMMAND_NAME} create` without any arguments for interactive config.
                     Or use CLI args to override the default options.
                     For more info, run: `{COMMAND_NAME} create --help`
                   """
