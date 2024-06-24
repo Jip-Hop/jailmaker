@@ -28,14 +28,14 @@ pre_start_hook=#!/usr/bin/env bash
 distro=nixos
 release=24.05
 
-# # Example initial_setup which rebuild the system,
-# # for when you mount your own /etc/nixos/configuration.nix inside the jail
-# initial_setup=#!/run/current-system/sw/bin/bash
-#     . /etc/bashrc
-#     set -x
-#     ifconfig
-#     nixos-rebuild switch
-#     echo "All Done"
+# Example initial_setup which rebuild the system,
+# for when you mount your own /etc/nixos/configuration.nix inside the jail
+initial_setup=#!/run/current-system/sw/bin/bash
+    . /etc/bashrc
+    set -xe
+    ifconfig
+    nixos-rebuild switch
+    echo "NixOS is ready"
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed
