@@ -125,6 +125,8 @@ SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
+INITIAL_ROOT = os.open("/", os.O_PATH)
+CWD_BEFORE_CHROOT = None
 SHORTNAME = "jlmkr"
 
 # Only set a color if we have an interactive tty
@@ -292,6 +294,20 @@ def fail(*args, **kwargs):
     """
     eprint(*args, **kwargs)
     sys.exit(1)
+
+
+def enter_chroot(new_root):
+    global CWD_BEFORE_CHROOT
+    CWD_BEFORE_CHROOT = os.path.abspath(os.getcwd())
+    os.chdir(new_root)
+    os.chroot(".")
+
+
+# https://stackoverflow.com/a/61533559
+def exit_chroot():
+    os.chdir(INITIAL_ROOT)
+    os.chroot(".")
+    os.chdir(CWD_BEFORE_CHROOT)
 
 
 def get_jail_path(jail_name):
@@ -1627,16 +1643,21 @@ def get_all_jail_names():
     return jail_names
 
 
-def parse_os_release(candidates):
-    for candidate in candidates:
+def parse_os_release(new_rootfs):
+    enter_chroot(new_rootfs)
+    result = {}
+    for candidate in ["/etc/os-release", "/usr/lib/os-release"]:
         try:
             with open(candidate, encoding="utf-8") as f:
                 # TODO: can I create a solution which not depends on the internal _parse_os_release method?
-                return platform._parse_os_release(f)
+                result = platform._parse_os_release(f)
+                break
         except OSError:
             # Silently ignore failing to read os release info
             pass
-    return {}
+
+    exit_chroot()
+    return result
 
 
 def list_jails():
@@ -1691,13 +1712,7 @@ def list_jails():
                     jail["addresses"] += "…"
         else:
             # Parse os-release info ourselves
-            jail_platform = parse_os_release(
-                (
-                    os.path.join(jail_rootfs_path, "etc/os-release"),
-                    os.path.join(jail_rootfs_path, "usr/lib/os-release"),
-                )
-            )
-
+            jail_platform = parse_os_release(jail_rootfs_path)
             jail["os"] = jail_platform.get("ID")
             jail["version"] = jail_platform.get("VERSION_ID") or jail_platform.get(
                 "VERSION_CODENAME"
