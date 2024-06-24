@@ -485,9 +485,7 @@ def log_jail(jail_name):
     """
     Show the log file of the jail with given name.
     """
-    return subprocess.run(
-        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}"]
-    ).returncode
+    return subprocess.run(["journalctl", "-u", f"{SHORTNAME}-{jail_name}"]).returncode
 
 
 def shell_jail(args):
@@ -658,18 +656,7 @@ def start_jail(jail_name):
     if not os.path.exists(os.path.join(jail_rootfs_path, "etc/machine-id")) and (
         initial_setup := config.my_get("initial_setup")
     ):
-        if not initial_setup.startswith("#!"):
-            initial_setup = "#!/bin/sh\n" + initial_setup
-
-        initial_setup_file_jailed_path = "/root/jlmkr-initial-setup"
-        initial_setup_file_host_path = os.path.abspath(
-            jail_rootfs_path + initial_setup_file_jailed_path
-        )
-
-        # Write a script file to call during initial setup
-        print(initial_setup, file=open(initial_setup_file_host_path, "w"))
-        stat_chmod(initial_setup_file_host_path, 0o700)
-
+        # initial_setup has been assigned due to := expression above
         # Ensure the jail init system is ready before we start the initial_setup
         systemd_nspawn_additional_args += [
             "--notify-ready=yes",
@@ -712,38 +699,56 @@ def start_jail(jail_name):
 
     # Handle initial setup after jail is up and running (for the first time)
     if initial_setup:
-        print("About to run the initial setup.")
+        if not initial_setup.startswith("#!"):
+            initial_setup = "#!/bin/sh\n" + initial_setup
+
+        with tempfile.NamedTemporaryFile(
+            mode="w+t",
+            prefix="jlmkr-initial-setup.",
+            dir=jail_rootfs_path,
+            delete=False,
+        ) as initial_setup_file:
+            # Write a script file to call during initial setup
+            initial_setup_file.write(initial_setup)
+
+        initial_setup_file_name = os.path.basename(initial_setup_file.name)
+        initial_setup_file_host_path = os.path.abspath(initial_setup_file.name)
+        stat_chmod(initial_setup_file_host_path, 0o700)
+
+        print(f"About to run the initial setup script: {initial_setup_file_name}.")
         print("Waiting for networking in the jail to be ready.")
-        print("Please wait (this may take 90s in case of bridge networking with STP is enabled)...")
+        print(
+            "Please wait (this may take 90s in case of bridge networking with STP is enabled)..."
+        )
         returncode = exec_jail(
             jail_name,
             [
                 "--",
                 "systemd-run",
-                f"--unit={os.path.basename(initial_setup_file_jailed_path)}",
+                f"--unit={initial_setup_file_name}",
                 "--quiet",
                 "--pipe",
                 "--wait",
                 "--service-type=exec",
                 "--property=After=network-online.target",
                 "--property=Wants=network-online.target",
-                initial_setup_file_jailed_path,
+                "/" + initial_setup_file_name,
             ],
         )
-
-        # Cleanup the initial_setup_file_host_path
-        if initial_setup_file_host_path:
-            Path(initial_setup_file_host_path).unlink(missing_ok=True)
 
         if returncode != 0:
             eprint("Tried to run the following commands inside the jail:")
             eprint(initial_setup)
             eprint()
+            eprint(f"{RED}{BOLD}Failed to run initial setup...")
             eprint(
-                f"""{RED}{BOLD}Failed to run initial setup... you may want to stop and remove the jail and try again.{NORMAL}"""
+                f"You may want to manually run /{initial_setup_file_name} inside the jail for debugging purposes."
             )
+            eprint(f"Or stop and remove the jail and try again.{NORMAL}")
             return returncode
         else:
+            # Cleanup the initial_setup_file_host_path
+            Path(initial_setup_file_host_path).unlink(missing_ok=True)
             print(f"Done with initial setup of jail {jail_name}!")
 
     return returncode
