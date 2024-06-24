@@ -15,6 +15,7 @@
 |Debian 12 Bookworm|✅|
 |Ubuntu Jammy|✅|
 |Fedora 39|✅|
+|Nixos 24.05|✅|
 |Arch|🟨|
 |Alpine|❌|      
 

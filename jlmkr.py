@@ -1379,6 +1379,7 @@ def create_jail(**kwargs):
 
         if (
             init_system_name != "systemd"
+            and parse_os_release(jail_rootfs_path).get("ID") != "nixos"
         ):
             print(
                 dedent(
