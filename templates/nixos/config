@@ -34,7 +34,7 @@ initial_setup=#!/run/current-system/sw/bin/bash
     . /etc/bashrc
     set -xe
     ifconfig
-    nixos-rebuild switch
+    nixos-rebuild switch # Optional - although recommended
     echo "NixOS is ready"
 
 # You generally will not need to change the options below
