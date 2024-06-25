@@ -115,9 +115,6 @@ systemd_nspawn_default_args=--bind-ro=/sys/module
 # Always add --bind-ro=/sys/module to make lsmod happy
 # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
 
-JAILS_DIR_PATH = "jails"
-JAIL_CONFIG_NAME = "config"
-JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
@@ -126,6 +123,9 @@ SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
 SHORTNAME = "jlmkr"
+JAILS_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "jails")
+JAIL_CONFIG_NAME = "config"
+JAIL_ROOTFS_NAME = "rootfs"
 
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
@@ -288,14 +288,14 @@ class Chroot:
     def __enter__(self):
         self.old_root = os.open("/", os.O_PATH)
         self.initial_cwd = os.path.abspath(os.getcwd())
-        os.chdir(self.new_root)
+#       os.chdir(self.new_root)
         os.chroot(".")
 
     def __exit__(self, exc_type, exc_value, traceback):
-        os.chdir(self.old_root)
+#       os.chdir(self.old_root)
         os.chroot(".")
         os.close(self.old_root)
-        os.chdir(self.initial_cwd)
+#       os.chdir(self.initial_cwd)
 
 
 def eprint(*args, **kwargs):
@@ -1968,7 +1968,7 @@ def main():
     stat_chmod(SCRIPT_PATH, 0o700)
 
     # Work relative to this script
-    os.chdir(SCRIPT_DIR_PATH)
+#   os.chdir(SCRIPT_DIR_PATH)
 
     # Ignore all args after the first "--"
     args_to_parse = split_at_string(sys.argv[1:], "--")[0]
