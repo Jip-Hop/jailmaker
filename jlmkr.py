@@ -288,14 +288,14 @@ class Chroot:
     def __enter__(self):
         self.old_root = os.open("/", os.O_PATH)
         self.initial_cwd = os.path.abspath(os.getcwd())
-#       os.chdir(self.new_root)
+        os.chdir(self.new_root)
         os.chroot(".")
 
     def __exit__(self, exc_type, exc_value, traceback):
-#       os.chdir(self.old_root)
+        os.chdir(self.old_root)
         os.chroot(".")
         os.close(self.old_root)
-#       os.chdir(self.initial_cwd)
+        os.chdir(self.initial_cwd)
 
 
 def eprint(*args, **kwargs):
@@ -591,7 +591,8 @@ def start_jail(jail_name):
 
     systemd_run_additional_args = [
         f"--unit={SHORTNAME}-{jail_name}",
-        f"--working-directory=./{jail_path}",
+        #f"--working-directory=./{jail_path}",
+        f"--working-directory={jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
