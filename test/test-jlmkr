@@ -154,4 +154,3 @@ else
     echo "Stopped: $STOP"
     [[ "$STOP" = "Single Test" ]] || exit 1
 fi
-
