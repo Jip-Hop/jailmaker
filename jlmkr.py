@@ -1276,10 +1276,14 @@ def create_jail(**kwargs):
 
         if jail_config_path:
             # TODO: fallback to default values for e.g. distro and release if they are not in the config file
-            print(f"Creating jail {jail_name} from config template {jail_config_path}.")
-            if jail_config_path not in config.read(jail_config_path):
-                eprint(f"Failed to read config template {jail_config_path}.")
-                return 1
+            if jail_config_path == "-":
+                print(f"Creating jail {jail_name} from config template passed via stdin.")
+                config.read_string(sys.stdin.read())
+            else:
+                print(f"Creating jail {jail_name} from config template {jail_config_path}.")
+                if jail_config_path not in config.read(jail_config_path):
+                    eprint(f"Failed to read config template {jail_config_path}.")
+                    return 1
         else:
             print(f"Creating jail {jail_name} with default config.")
             config.read_string(DEFAULT_CONFIG)
@@ -1936,7 +1940,7 @@ def main():
     commands["create"].add_argument(
         "-c",  #
         "--config",
-        help="path to config file template",
+        help="path to config file template or - for stdin",
     )
     commands["create"].add_argument(
         "-gi",  #
