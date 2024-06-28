@@ -1,0 +1,157 @@
+#! /usr/bin/env bash
+
+# Example invokation
+# sudo SCALE_POOL_ROOT=$SCALE_POOL_ROOT $SCALE_POOL_ROOT/jailmaker/test/test-jlmkr docker
+
+set -e
+
+#### Global variables
+JAIL_TYPE="${1:?Must specify JAIL TYPE}"
+if [ -r "${JAIL_TYPE}" ]; then
+    JAIL_CONFIG="$JAIL_TYPE"
+    JAIL_TYPE=
+    # Can't perform full test with config path
+    FULL_TEST=0
+else
+    SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
+    JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/templates/$JAIL_TYPE/config"
+    # Full test is an option when using JAIL_TYPE
+    FULL_TEST=${FULL_TEST:-0}
+fi
+if [ ! -r ${JAIL_CONFIG} ]; then
+    echo "Must supply a valid jail type or config path"
+    exit 2
+fi
+JAIL="${2:-${JAIL_TYPE:?You must provide jail name (2nd arg) with a valid path to config}-test}"
+
+# STOP=0 - perform all non-blocking tests
+# STOP=l - only list and images, nothing else
+# STOP=i - interactive test, includ console-blocking waiting for input tests (edit and shell)
+STOP=${STOP:-0}
+
+REPORT=(create edit exec images list log remove restart shell start status stop)
+
+WAIT_FOR_JAIL=${WAIT_FOR_JAIL:-4s}
+
+#### Functions
+jlmkr () {
+    $SCALE_POOL_ROOT/jailmaker/jlmkr.py "${@:---help}"
+}
+
+iterate () {
+    local SET=($1) DO=("${@:2}")
+    local x j _x x_STATUS
+
+    for j in "${SET[@]}"; do
+        for _x in "${DO[@]}"; do
+            x="${_x//\(Jv)/JLMKR_"$j"}"
+            # echo "$x" >&2
+            ${NO_EVAL:+:} eval "echo \$JLMKR_${j} \"$x\""
+            x_STATUS=✅
+            ${NO_EVAL:+:} eval "JLMKR_$j=$x_STATUS"
+            ${NO_EVAL:+:} eval "JLMKR_${j}_x=\"${x//\"/\'}\""
+
+            if [[ -n "$DELAY" ]]; then
+                echo "Waiting ${DELAY} seconds before test..."
+                sleep ${DELAY}
+            fi
+
+            set +e
+            eval "$x" || x_STATUS=$?
+            set -e
+            if [[ "$x_STATUS" != "✅" ]]; then
+                ${NO_EVAL:+:} eval "JLMKR_${j}_x=\"($x_STATUS) ${x//\"/\'}\""
+                ${NO_EVAL:+:} eval "JLMKR_$j=❌"
+                STOP=E:$x_STATUS
+                return
+            fi
+        done
+    done
+}
+
+perform_test_suite() {
+    if [[ "$STOP" =~ ^(0|l|i)$ ]]; then
+        # Initialize REPORT with empty checkboxes - NO_EVAL=1 is important here, otherwise Status will be evaluated
+        NO_EVAL=1 iterate "${REPORT[*]}" '(Jv)="🔳"'
+
+        TESTS=(list images)
+        iterate "${TESTS[*]}" 'jlmkr $j'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(create) \
+        && iterate "${TESTS[*]}" 'jlmkr $j --config $JAIL_CONFIG $JAIL'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(start) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(restart) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        [[ "$STOP" =~ ^(i)$ ]] && TESTS=(edit shell) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(exec) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo exec successful"'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(status) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL --no-pager'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(log) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL -n 10'
+
+        [[ "$STOP" =~ ^(0|l|i)$ ]] || echo "Had an Error. Cleanup up and stopping."
+        
+        # Always perform these cleanup steps, even if something failed
+        [[ "$STOP" != l ]] \
+        && TESTS=(stop) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL' \
+
+        [[ "$STOP" != l ]] \
+        && TESTS=(remove) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL <<<"$JAIL" '
+    
+    fi
+    printf '\n\nReport for:\n\tCWD: %s\t\tJAIL_CONFIG: %s\n\n' "$(pwd)" "${JAIL_CONFIG}"
+
+    NO_EVAL=1 iterate "${REPORT[*]}" 'echo "$(Jv) ${(Jv)_x:-$j}"' #printf '\"%s jlmkr %s\\n\"' '\$(Jv)' '\$j'"
+}
+
+#### Execution starts here
+
+perform_test_suite
+
+if [[ "$STOP" =~ ^(0|i)$ ]]; then
+    [[ "$FULL_TEST" == 1 ]] || STOP="Single Test"
+fi
+
+if [[ "$STOP" =~ ^(0|i)$ ]]; then
+    pushd "$SCALE_POOL_ROOT/jailmaker" > /dev/null || STOP=pushd
+    STOP=0 # The following test suite should only be run non-interactivley
+    
+    JAIL_CONFIG="./templates/$JAIL_TYPE/config"
+    perform_test_suite
+    
+    JAIL_CONFIG="templates/$JAIL_TYPE/config"
+    perform_test_suite
+    
+    JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/$JAIL_CONFIG"
+    perform_test_suite
+
+    cd ~
+    perform_test_suite
+
+    TMP_JAIL_CFG=$(mktemp) \
+    && cp "$JAIL_CONFIG" "$TMP_JAIL_CFG" \
+    && JAIL_CONFIG="${TMP_JAIL_CFG}" perform_test_suite \
+    && rm "$TMP_JAIL_CFG" \
+    || STOP=E:temp_file
+    
+    popd > /dev/null || STOP=popd
+fi
+
+if [[ "$STOP" = 0 ]]; then
+    echo "All tests completed"
+else
+    echo "Stopped: $STOP"
+    [[ "$STOP" = "Single Test" ]] || exit 1
+fi
+
