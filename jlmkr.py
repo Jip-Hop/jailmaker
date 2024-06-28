@@ -490,23 +490,23 @@ def exec_jail(jail_name, cmd):
     ).returncode
 
 
-def status_jail(jail_name, cmd_args):
+def status_jail(jail_name, args):
     """
     Show the status of the systemd service wrapping the jail with given name.
     """
     # Alternatively `machinectl status jail_name` could be used
-    if not cmd_args: cmd_args = []
     return subprocess.run(
-        ["systemctl", "status", f"{SHORTNAME}-{jail_name}", *cmd_args, ]
+        ["systemctl", "status", f"{SHORTNAME}-{jail_name}", *args]
     ).returncode
 
 
-def log_jail(jail_name, cmd_args):
+def log_jail(jail_name, args):
     """
     Show the log file of the jail with given name.
     """
-    if not cmd_args: cmd_args = ["-xe"]
-    return subprocess.run(["journalctl", *cmd_args, "-u", f"{SHORTNAME}-{jail_name}"]).returncode
+    return subprocess.run(
+        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}", *args]
+    ).returncode
 
 
 def shell_jail(args):
@@ -1885,13 +1885,6 @@ def main():
     for cmd in ["edit", "exec", "log", "remove", "restart", "start", "status", "stop"]:
         commands[cmd].add_argument("jail_name", help="name of the jail")
 
-    for cmd in ["log", "status"]:
-        commands[cmd].add_argument(
-            "cmd_args",
-            nargs="*",
-            help="journalctl arguments",
-        )
-
     commands["exec"].add_argument(
         "cmd",
         nargs="*",
@@ -1902,6 +1895,18 @@ def main():
         "args",
         nargs="*",
         help="args to pass to machinectl shell",
+    )
+
+    commands["log"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to journalctl",
+    )
+
+    commands["status"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to systemctl",
     )
 
     commands["create"].add_argument(
