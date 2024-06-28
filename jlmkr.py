@@ -1989,7 +1989,6 @@ def main():
                     args = vars(parser.parse_known_args(args_to_parse)[0])
                     # ...and check if help is still in the remaining args
                     need_help = args.get("help")
-                    print(need_help)
 
                 if need_help:
                     commands[command].print_help()
