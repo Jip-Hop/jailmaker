@@ -174,7 +174,7 @@ class KeyValueParser(configparser.ConfigParser):
         # Template to store comments as key value pair
         self._comment_template = "#{0} " + delimiter + " {1}"
         # Regex to match the comment prefix
-        self._comment_regex = re.compile(f"^#\d+\s*{re.escape(delimiter)}[^\S\n]*")
+        self._comment_regex = re.compile(r"^#\d+\s*" + re.escape(delimiter) + r"[^\S\n]*")
         # Regex to match cosmetic newlines (skips newlines in multiline values):
         # consecutive whitespace from start of line followed by a line not starting with whitespace
         self._cosmetic_newlines_regex = re.compile(r"^(\s+)(?=^\S)", re.MULTILINE)
@@ -538,7 +538,7 @@ def systemd_escape_path(path):
     """
     return "".join(
         map(
-            lambda char: "\s" if char == " " else "\\\\" if char == "\\" else char, path
+            lambda char: r"\s" if char == " " else "\\\\" if char == "\\" else char, path
         )
     )
 
