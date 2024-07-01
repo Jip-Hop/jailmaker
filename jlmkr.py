@@ -115,9 +115,6 @@ systemd_nspawn_default_args=--bind-ro=/sys/module
 # Always add --bind-ro=/sys/module to make lsmod happy
 # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
 
-JAILS_DIR_PATH = "jails"
-JAIL_CONFIG_NAME = "config"
-JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
@@ -126,6 +123,11 @@ SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
 SHORTNAME = "jlmkr"
+JAILS_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "jails")
+JAIL_CONFIG_NAME = "config"
+JAIL_ROOTFS_NAME = "rootfs"
+
+ZFS_BASE_PATH = None # Placeholder, relies on get_zfs_dataset which has not been defined yet.
 
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
@@ -591,7 +593,8 @@ def start_jail(jail_name):
 
     systemd_run_additional_args = [
         f"--unit={SHORTNAME}-{jail_name}",
-        f"--working-directory=./{jail_path}",
+        #f"--working-directory=./{jail_path}",
+        f"--working-directory={jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
@@ -793,9 +796,10 @@ def cleanup(jail_path):
     Cleanup jail.
     """
 
-    if get_zfs_dataset(jail_path):
-        eprint(f"Cleaning up: {jail_path}.")
-        remove_zfs_dataset(jail_path)
+    jail_zfs_path = get_zfs_dataset(jail_path,False)
+    if jail_zfs_path:
+        eprint(f"Cleaning up: {jail_zfs_path}.")
+        remove_zfs_dataset(jail_zfs_path)
 
     elif os.path.isdir(jail_path):
         # Workaround for https://github.com/python/cpython/issues/73885
@@ -941,9 +945,11 @@ def get_mount_point(path):
     return path
 
 
-def get_zfs_dataset(path):
+def get_zfs_dataset(path,must_exist=True):
     """
     Get ZFS dataset path.
+    if must_exist=True (the default), the dataset must exists, otherwise,
+    the parent must exist (to allow creation)
     """
 
     def clean_field(field):
@@ -952,42 +958,39 @@ def get_zfs_dataset(path):
         return field.replace("\\040", " ")
 
     path = os.path.realpath(path)
+
     with open("/proc/mounts", "r") as f:
         for line in f:
             fields = line.split()
-            if "zfs" == fields[2] and path == clean_field(fields[1]):
-                return clean_field(fields[0])
+            if "zfs" == fields[2]:
+                if path == clean_field(fields[1]):
+                    return clean_field(fields[0])
+                if not must_exist and path == clean_field(str(Path(fields[1]).parent)):
+                    return clean_field(os.path.join(fields[0],str(Path(fields[1]).parent)))
 
 
-def get_zfs_base_path():
-    """
-    Get ZFS dataset path for jailmaker directory.
-    """
-    zfs_base_path = get_zfs_dataset(SCRIPT_DIR_PATH)
-    if not zfs_base_path:
-        fail("Failed to get dataset path for jailmaker directory.")
-
-    return zfs_base_path
-
-
-def create_zfs_dataset(relative_path):
+def create_zfs_dataset(dataset_path):
     """
     Create a ZFS Dataset.
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail").
+    Receives the dataset to be created. Path must be in the jailmaker path.
     """
-    dataset_to_create = os.path.join(get_zfs_base_path(), relative_path)
-    eprint(f"Creating ZFS Dataset {dataset_to_create}")
-    subprocess.run(["zfs", "create", dataset_to_create], check=True)
+    if dataset_path.replace(ZFS_BASE_PATH,"") == dataset_path:
+        fail("Creating dataset outside of the jailpath is unsupported")
+
+    eprint(f"Creating ZFS Dataset {dataset_path}")
+    subprocess.run(["zfs", "create", dataset_path], check=True)
 
 
-def remove_zfs_dataset(relative_path):
+def remove_zfs_dataset(dataset_path):
     """
     Remove a ZFS Dataset.
-    Receives the dataset to be removed relative to the jailmaker script (e.g. "jails/oldjail").
+    Receives the dataset to be removed. Path must be in the jailmaker path.
     """
-    dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
-    eprint(f"Removing ZFS Dataset {dataset_to_remove}")
-    subprocess.run(["zfs", "destroy", "-r", dataset_to_remove], check=True)
+    if dataset_path.replace(ZFS_BASE_PATH,"") == dataset_path:
+        fail("Removing dataset outside of the jailpath is unsupported")
+
+    eprint(f"Removing ZFS Dataset {dataset_path}")
+    subprocess.run(["zfs", "destroy", "-r", dataset_path], check=True)
 
 
 def check_jail_name_valid(jail_name, warn=True):
@@ -1232,7 +1235,7 @@ def interactive_config():
 def create_jail(**kwargs):
     print(DISCLAIMER)
 
-    if os.path.basename(os.getcwd()) != "jailmaker":
+    if os.path.basename(SCRIPT_DIR_PATH) != "jailmaker":
         eprint(
             dedent(
                 f"""
@@ -1244,7 +1247,7 @@ def create_jail(**kwargs):
         )
         return 1
 
-    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
+    if not PurePath(get_mount_point(SCRIPT_DIR_PATH)).is_relative_to("/mnt"):
         print(
             dedent(
                 f"""
@@ -1334,16 +1337,19 @@ def create_jail(**kwargs):
     try:
         # Create the dir or dataset where to store the jails
         if not os.path.exists(JAILS_DIR_PATH):
-            if get_zfs_dataset(SCRIPT_DIR_PATH):
+            if get_zfs_dataset(JAILS_DIR_PATH, False):
                 # Creating "jails" dataset if "jailmaker" is a ZFS Dataset
                 create_zfs_dataset(JAILS_DIR_PATH)
             else:
+                print( f"Creating directory {JAILS_DIR_PATH}")
                 os.makedirs(JAILS_DIR_PATH, exist_ok=True)
             stat_chmod(JAILS_DIR_PATH, 0o700)
 
         # Creating a dataset for the jail if the jails dir is a dataset
-        if get_zfs_dataset(JAILS_DIR_PATH):
-            create_zfs_dataset(jail_path)
+        jail_zfs_path = get_zfs_dataset(jail_path,False)
+        print( f"{JAILS_DIR_PATH} {jail_zfs_path}")
+        if jail_zfs_path:
+            create_zfs_dataset(jail_zfs_path)
 
         jail_config_path = get_jail_config_path(jail_name)
         jail_rootfs_path = get_jail_rootfs_path(jail_name)
@@ -1796,6 +1802,8 @@ def add_parser(subparser, **kwargs):
 
     return parser
 
+# Fill in placeholder (if applicapple)
+ZFS_BASE_PATH = get_zfs_dataset(SCRIPT_DIR_PATH)
 
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
@@ -1966,9 +1974,6 @@ def main():
 
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
     stat_chmod(SCRIPT_PATH, 0o700)
-
-    # Work relative to this script
-    os.chdir(SCRIPT_DIR_PATH)
 
     # Ignore all args after the first "--"
     args_to_parse = split_at_string(sys.argv[1:], "--")[0]
