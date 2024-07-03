@@ -22,4 +22,4 @@ Optional: place assets in the TFTP directory for netbooting clients.
 
 Attach more jails to this same bridge to host e.g. a K3s control plane, an nginx load balancer, a PostgreSQL database...
 
-Check out the [config](./config) template file. You may provide it when asked during `./jlmkr.py create` or, if you have the template file stored on your NAS, you may provide it directly by running `./jlmkr.py create --start --config /mnt/tank/path/to/k3s/config myk3sjail`.
+Check out the [config](./config) template file. You may provide it when asked during `./jlmkr.py create` or, if you have the template file stored on your NAS, you may provide it directly by running `./jlmkr.py create --start --config /mnt/tank/path/to/router/config myrouterjail`.
