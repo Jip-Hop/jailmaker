@@ -1,17 +1,17 @@
 # See also:
 # <https://github.com/Jip-Hop/jailmaker/tree/main/templates/router>
 #
-startup=1
+startup=0
 gpu_passthrough_intel=0
 gpu_passthrough_nvidia=0
 # Turning off seccomp filtering improves performance at the expense of security
 seccomp=1
 
-# Use macvlan networking to provide an isolated network namespace.
+# Use bridge networking to provide an isolated network namespace
 # Alternatively use --network-macvlan=eno1 instead of --network-bridge
 # Ensure to change br0 to the HOST interface name you want to use
-# and br1 to the SECONDARY interface name you want to prepare.
-# Substitute your own dnsmasq.d and TFTP dataset bindings.
+# and br1 to the SECONDARY interface name you want to prepare
+# Substitute your own dnsmasq.d and TFTP dataset bindings
 systemd_nspawn_user_args=--network-bridge=br0
     --network-veth-extra=ve-router-1:vee-1
     --resolv-conf=bind-host
