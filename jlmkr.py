@@ -115,9 +115,6 @@ systemd_nspawn_default_args=--bind-ro=/sys/module
 # Always add --bind-ro=/sys/module to make lsmod happy
 # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
 
-JAILS_DIR_PATH = "jails"
-JAIL_CONFIG_NAME = "config"
-JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
@@ -125,6 +122,9 @@ SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
+JAILS_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "jails")
+JAIL_CONFIG_NAME = "config"
+JAIL_ROOTFS_NAME = "rootfs"
 SHORTNAME = "jlmkr"
 
 # Only set a color if we have an interactive tty
@@ -591,7 +591,7 @@ def start_jail(jail_name):
 
     systemd_run_additional_args = [
         f"--unit={SHORTNAME}-{jail_name}",
-        f"--working-directory=./{jail_path}",
+        f"--working-directory={jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
@@ -940,6 +940,8 @@ def get_mount_point(path):
         path = os.path.dirname(path)
     return path
 
+def get_relative_path_in_jailmaker_dir(absolute_path):    
+    return PurePath(absolute_path).relative_to(SCRIPT_DIR_PATH)
 
 def get_zfs_dataset(path):
     """
@@ -970,21 +972,23 @@ def get_zfs_base_path():
     return zfs_base_path
 
 
-def create_zfs_dataset(relative_path):
+def create_zfs_dataset(absolute_path):
     """
-    Create a ZFS Dataset.
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail").
+    Create a ZFS Dataset inside the jailmaker directory at the provided absolute path.
+    E.g. "/mnt/mypool/jailmaker/jails" or "/mnt/mypool/jailmaker/jails/newjail").
     """
+    relative_path = get_relative_path_in_jailmaker_dir(absolute_path)
     dataset_to_create = os.path.join(get_zfs_base_path(), relative_path)
     eprint(f"Creating ZFS Dataset {dataset_to_create}")
     subprocess.run(["zfs", "create", dataset_to_create], check=True)
 
 
-def remove_zfs_dataset(relative_path):
+def remove_zfs_dataset(absolute_path):
     """
-    Remove a ZFS Dataset.
-    Receives the dataset to be removed relative to the jailmaker script (e.g. "jails/oldjail").
+    Remove a ZFS Dataset inside the jailmaker directory at the provided absolute path.
+    E.g. "/mnt/mypool/jailmaker/jails/oldjail".
     """
+    relative_path = get_relative_path_in_jailmaker_dir(absolute_path)
     dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
     eprint(f"Removing ZFS Dataset {dataset_to_remove}")
     subprocess.run(["zfs", "destroy", "-r", dataset_to_remove], check=True)
@@ -1232,7 +1236,7 @@ def interactive_config():
 def create_jail(**kwargs):
     print(DISCLAIMER)
 
-    if os.path.basename(os.getcwd()) != "jailmaker":
+    if os.path.basename(SCRIPT_DIR_PATH) != "jailmaker":
         eprint(
             dedent(
                 f"""
@@ -1244,7 +1248,7 @@ def create_jail(**kwargs):
         )
         return 1
 
-    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
+    if not PurePath(get_mount_point(SCRIPT_DIR_PATH)).is_relative_to("/mnt"):
         print(
             dedent(
                 f"""
@@ -1966,9 +1970,6 @@ def main():
 
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
     stat_chmod(SCRIPT_PATH, 0o700)
-
-    # Work relative to this script
-    os.chdir(SCRIPT_DIR_PATH)
 
     # Ignore all args after the first "--"
     args_to_parse = split_at_string(sys.argv[1:], "--")[0]
