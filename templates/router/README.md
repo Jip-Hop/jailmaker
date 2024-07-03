@@ -18,7 +18,7 @@ router   laptop  desktop
 
 Use the TrueNAS SCALE administrative UI to create a network bridge interface. Assign to that bridge a physical interface that's not shared with the host network.
 
-Use the `dnsmasq-example.conf` file as a starting point for your own dnsmasq settings file(s). Copy or mount them inside `/etc/dnsmasq.d/` within in the jail.
+Use the `dnsmasq-example.conf` file as a starting point for your own dnsmasq settings file(s). Copy or mount them inside `/etc/dnsmasq.d/` within the jail.
 
 Optional: place assets in the mounted `/tftp/` directory for netbooting clients.
 
