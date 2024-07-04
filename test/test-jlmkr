@@ -18,13 +18,15 @@ else
     # Full test is an option when using JAIL_TYPE
     FULL_TEST=${FULL_TEST:-0}
 fi
-if [ ! -r ${JAIL_CONFIG} ]; then
+if [ ! -r "${JAIL_CONFIG}" ]; then
     echo "Must supply a valid jail type or config path"
     exit 2
 fi
+
+# shellcheck disable=SC2034 # JAIL is used inside perform_test_suite
 JAIL="${2:-${JAIL_TYPE:?You must provide jail name (2nd arg) with a valid path to config}-test}"
 
-# STOP=0 - perform all non-blocking tests
+# STOP=0 - (default) perform all tests, in non-blocking mode 
 # STOP=l - only list and images, nothing else
 # STOP=i - interactive test, includ console-blocking waiting for input tests (edit and shell)
 STOP=${STOP:-0}
@@ -35,10 +37,11 @@ WAIT_FOR_JAIL=${WAIT_FOR_JAIL:-4s}
 
 #### Functions
 jlmkr () {
-    $SCALE_POOL_ROOT/jailmaker/jlmkr.py "${@:---help}"
+    "$SCALE_POOL_ROOT/jailmaker/jlmkr.py" "${@:---help}"
 }
 
 iterate () {
+    # shellcheck disable=SC2206 # $1 will pass multiple values, we want splitting here
     local SET=($1) DO=("${@:2}")
     local x j _x x_STATUS
 
@@ -53,7 +56,7 @@ iterate () {
 
             if [[ -n "$DELAY" ]]; then
                 echo "Waiting ${DELAY} seconds before test..."
-                sleep ${DELAY}
+                sleep "${DELAY}"
             fi
 
             set +e
@@ -70,6 +73,8 @@ iterate () {
 }
 
 perform_test_suite() {
+    # shellcheck disable=SC2016 # function relies heavily on single quotes preventing expansion
+
     if [[ "$STOP" =~ ^(0|l|i)$ ]]; then
         # Initialize REPORT with empty checkboxes - NO_EVAL=1 is important here, otherwise Status will be evaluated
         NO_EVAL=1 iterate "${REPORT[*]}" '(Jv)="🔳"'
@@ -86,11 +91,20 @@ perform_test_suite() {
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(restart) \
         && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
 
-        [[ "$STOP" =~ ^(i)$ ]] && TESTS=(edit shell) \
+        # If this is an interactive test, edit and shell will wait for input
+        [[ "$STOP" == "i" ]] && TESTS=(edit shell) \
         && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
 
+        # This is the non-interactive test for edit
+        [[ "$STOP" == "0" ]] && TESTS=(edit) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'EDITOR=cat jlmkr $j $JAIL'
+
+        # This is the non-interactive test for shell
+        [[ "$STOP" == "0" ]] && TESTS=(shell) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo shell called successful"'
+
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(exec) \
-        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo exec successful"'
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo exec called successful"'
 
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(status) \
         && iterate "${TESTS[*]}" 'jlmkr $j $JAIL --no-pager'
@@ -112,6 +126,7 @@ perform_test_suite() {
     fi
     printf '\n\nReport for:\n\tCWD: %s\t\tJAIL_CONFIG: %s\n\n' "$(pwd)" "${JAIL_CONFIG}"
 
+    # shellcheck disable=SC2016
     NO_EVAL=1 iterate "${REPORT[*]}" 'echo "$(Jv) ${(Jv)_x:-$j}"' #printf '\"%s jlmkr %s\\n\"' '\$(Jv)' '\$j'"
 }
 
@@ -154,3 +169,4 @@ else
     echo "Stopped: $STOP"
     [[ "$STOP" = "Single Test" ]] || exit 1
 fi
+
