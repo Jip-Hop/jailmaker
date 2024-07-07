@@ -6,25 +6,27 @@
 set -e
 
 #### Global variables
-JAIL_TYPE="${1:?Must specify JAIL TYPE}"
-if [ -r "${JAIL_TYPE}" ]; then
-    JAIL_CONFIG="$JAIL_TYPE"
-    JAIL_TYPE=
-    # Can't perform full test with config path
-    FULL_TEST=0
-else
-    SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
-    JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/templates/$JAIL_TYPE/config"
-    # Full test is an option when using JAIL_TYPE
-    FULL_TEST=${FULL_TEST:-0}
-fi
-if [ ! -r "${JAIL_CONFIG}" ]; then
-    echo "Must supply a valid jail type or config path"
-    exit 2
+JAIL_TYPE="${1}"
+if [ -n "${JAIL_TYPE}" ]; then
+    if [ -r "${JAIL_TYPE}" ]; then
+        JAIL_CONFIG="$JAIL_TYPE"
+        JAIL_TYPE=
+        # Can't perform full test with config path
+        FULL_TEST=0
+    else
+        SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
+        JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/templates/$JAIL_TYPE/config"
+        # Full test is an option when using JAIL_TYPE
+        FULL_TEST=${FULL_TEST:-0}
+    fi
+    if [ ! -r "${JAIL_CONFIG}" ]; then
+        echo "Must supply a valid jail type or config path"
+        exit 2
+    fi
 fi
 
 # shellcheck disable=SC2034 # JAIL is used inside perform_test_suite
-JAIL="${2:-${JAIL_TYPE:?You must provide jail name (2nd arg) with a valid path to config}-test}"
+JAIL="${2:-${JAIL_TYPE:-default}-test}"
 
 # STOP=0 - (default) perform all tests, in non-blocking mode 
 # STOP=l - only list and images, nothing else
@@ -83,7 +85,7 @@ perform_test_suite() {
         iterate "${TESTS[*]}" 'jlmkr $j'
 
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(create) \
-        && iterate "${TESTS[*]}" 'jlmkr $j --config $JAIL_CONFIG $JAIL'
+        && iterate "${TESTS[*]}" 'jlmkr $j ${JAIL_CONFIG:+--config} $JAIL_CONFIG $JAIL'
 
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(start) \
         && iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
