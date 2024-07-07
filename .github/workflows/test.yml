@@ -28,6 +28,10 @@ jobs:
       # (temporary)
       - name: Examine the GitHub-hosted runner environment
         run: |
+          uname -r
+          cat /etc/os-release
+          python3 --version
+          echo
           for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
               echo "✳️ $path"
               [ -d "$path" ] && ls -la "$path" || cat "$path"
@@ -62,6 +66,21 @@ jobs:
           systemctl restart dnsmasq.service
 # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
+#       # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
+#       # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
+#       - name: Create a parent ZFS dataset
+#         run: |
+#           apt-get install -y -qq zfsutils-linux
+#           modinfo zfs | grep version
+#           zfs --version
+#           zpool --version
+
       # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: sudo ./test/test.sh
+      - name: Run the test script
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          chown 0:0 jlmkr.py test/test.sh
+          chmod +x jlmkr.py test/test.sh
+
+          sudo ./test/test.sh
