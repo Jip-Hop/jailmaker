@@ -43,6 +43,7 @@ jobs:
       # simulating a primary bridge network on TrueNAS SCALE
       - name: Set up networking resources
         run: |
+          sudo -s <<END
           apt-get install -qq -y \
               systemd-container \
               nftables
@@ -64,16 +65,19 @@ jobs:
           sed -i -e 's/^#DNS=$/DNS=127.0.0.1/' /etc/systemd/resolved.conf
           systemctl restart systemd-resolved.service
           systemctl restart dnsmasq.service
+          END
 # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
 #       # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
 #       # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
 #       - name: Create a parent ZFS dataset
 #         run: |
+#           sudo -s <<END
 #           apt-get install -y -qq zfsutils-linux
 #           modinfo zfs | grep version
 #           zfs --version
 #           zpool --version
+#           END
 
       # Runs a single command using the runners shell
       - name: Run the test script
