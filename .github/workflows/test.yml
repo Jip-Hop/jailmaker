@@ -61,6 +61,20 @@ jobs:
           systemctl restart systemd-resolved.service
           apt-get install dnsmasq -y
 
+          cat <<DNSMASQ >/etc/dnsmasq.d/synthetic.conf
+          no-dhcp-interface=host0
+          interface=vee-1
+          bind-interfaces
+
+          dhcp-authoritative
+          dhcp-rapid-commit
+          dhcp-range=192.168.123.101,192.168.123.199
+
+          # designated upstream query servers
+          server=1.1.1.1
+          server=1.0.0.1
+          DNSMASQ
+
           # systemd-resolved should use dnsmasq as its upstream
           sed -i -e 's/^#DNS=$/DNS=127.0.0.1/' /etc/systemd/resolved.conf
           systemctl restart systemd-resolved.service
