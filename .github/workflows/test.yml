@@ -62,8 +62,8 @@ jobs:
           apt-get install dnsmasq -y
 
           cat <<DNSMASQ >/etc/dnsmasq.d/synthetic.conf
-          no-dhcp-interface=host0
-          interface=vee-1
+          no-dhcp-interface=eth0
+          interface=br1
           bind-interfaces
 
           dhcp-authoritative
@@ -77,8 +77,8 @@ jobs:
 
           # systemd-resolved should use dnsmasq as its upstream
           sed -i -e 's/^#DNS=$/DNS=127.0.0.1/' /etc/systemd/resolved.conf
-          systemctl restart systemd-resolved.service
-          systemctl restart dnsmasq.service
+          systemctl restart systemd-resolved.service || journalctl -xu systemd-resolved.service
+          systemctl restart dnsmasq.service || journalctl -xu dnsmasq.service
           END
 # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
