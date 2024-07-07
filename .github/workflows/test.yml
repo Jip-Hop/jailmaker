@@ -84,7 +84,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: 1
         run: |
-          chown 0:0 jlmkr.py test/test.sh
-          chmod +x jlmkr.py test/test.sh
+          sudo chown 0:0 jlmkr.py test/test.sh
+          sudo chmod +x jlmkr.py test/test.sh
 
           sudo ./test/test.sh
