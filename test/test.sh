@@ -4,13 +4,19 @@ set -euo pipefail
 # TODO: create a path and/or zfs pool with a space in it to test if jlmkr.py still works properly when ran from inside
 # mkdir -p "/tmp/path with space/jailmaker"
 
-./jlmkr.py create examiner \
-    --network-veth \
-    --system-call-filter='add_key keyctl bpf' \
-    --config=./test/examiner-config \
-    --start
-
-./jlmkr.py exec examiner "ip addr ; resolvectl query deb.debian.org ; ping -c3 192.168.123.1 ; ping -c3 deb.debian.org"
+./jlmkr.py create examiner --start
+./jlmkr.py exec examiner bash <<EOF
+for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
+	echo "✳️ $path"
+	[ -d "$path" ] && ls -la "$path" || cat "$path"
+	echo
+done
+ip addr
+resolvectl query deb.debian.org
+ping -c3 192.168.123.1
+ping -c3 deb.debian.org
+netstat -n -r
+EOF
 
 exit
 
