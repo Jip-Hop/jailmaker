@@ -4,7 +4,8 @@ set -euo pipefail
 # TODO: create a path and/or zfs pool with a space in it to test if jlmkr.py still works properly when ran from inside
 # mkdir -p "/tmp/path with space/jailmaker"
 
-./jlmkr.py create examiner --start
+./jlmkr.py create examiner
+./jlmkr.py start examiner
 ./jlmkr.py exec examiner bash <<EOF
 for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
 	echo "✳️ \$path"
