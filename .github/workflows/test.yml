@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  test:
     # The type of runner that the job will run on
     runs-on: ubuntu-24.04
 
@@ -24,6 +24,43 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
+
+      # (temporary)
+      - name: Examine the GitHub-hosted runner environment
+        run: |
+          for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
+              echo "✳️ $path"
+              [ -d "$path" ] && ls -la "$path" || cat "$path"
+              echo
+          done
+          ip addr
+
+      # Create a network namespace in the GitHub-hosted runner VM,
+      # simulating a primary bridge network on TrueNAS SCALE
+      - name: Set up networking resources
+        run: |
+          apt-get install -qq -y \
+              systemd-container \
+              nftables
+
+          ip link add name br1 type bridge
+          ip address add 192.168.123.1/24 dev br1
+                    
+          nft add table nat
+          nft add chain nat prerouting { type nat hook prerouting priority 0 \; }
+          nft add chain nat postrouting { type nat hook postrouting priority 100 \; }
+          nft add rule nat postrouting masquerade
+
+          # dnsmasq can't install with systemd-resolved in its way
+          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
+          systemctl restart systemd-resolved.service
+          apt-get install dnsmasq -y
+
+          # systemd-resolved should use dnsmasq as its upstream
+          sed -i -e 's/^#DNS=$/DNS=127.0.0.1/' /etc/systemd/resolved.conf
+          systemctl restart systemd-resolved.service
+          systemctl restart dnsmasq.service
+# NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
       # Runs a single command using the runners shell
       - name: Run a one-line script
