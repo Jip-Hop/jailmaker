@@ -10,6 +10,8 @@ set -euo pipefail
     --config=./test/examiner-config \
     --start
 
+./jlmkr.py exec examiner "ip addr ; resolvectl query deb.debian.org ; ping -c3 192.168.123.1 ; ping -c3 deb.debian.org"
+
 exit
 
 # TODO: test jlmkr.py from inside another working directory, with a relative path to a config file to test if it uses the config file (and doesn't look for it relative to the jlmkr.py file itself)
