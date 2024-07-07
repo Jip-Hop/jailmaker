@@ -7,8 +7,8 @@ set -euo pipefail
 ./jlmkr.py create examiner --start
 ./jlmkr.py exec examiner bash <<EOF
 for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
-	echo "✳️ $path"
-	[ -d "$path" ] && ls -la "$path" || cat "$path"
+	echo "✳️ \$path"
+	[ -d "\$path" ] && ls -la "\$path" || cat "\$path"
 	echo
 done
 ip addr
