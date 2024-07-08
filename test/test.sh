@@ -22,6 +22,7 @@ ping -c1 1.1.1.1
 ping -c1 deb.debian.org
 EOF
 
+sleep 5
 ./jlmkr.py exec examiner bash /root/debug.sh
 
 # TODO: test jlmkr.py from inside another working directory, with a relative path to a config file to test if it uses the config file (and doesn't look for it relative to the jlmkr.py file itself)
