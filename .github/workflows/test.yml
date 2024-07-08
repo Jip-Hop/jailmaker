@@ -34,8 +34,7 @@ jobs:
         run: |
           sudo -s <<END
 
-          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
-          systemctl stop systemd-resolved
+          systemctl disable systemd-resolved --now
           rm /etc/resolv.conf
           echo 'nameserver 1.1.1.1' > /etc/resolv.conf
 
