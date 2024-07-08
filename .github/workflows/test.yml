@@ -61,7 +61,7 @@ jobs:
           systemctl restart systemd-networkd
           ip link add name br1 type bridge
 
-          iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+          iptables -I DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
           iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
           END
 
