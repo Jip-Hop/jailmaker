@@ -6,6 +6,25 @@
 set -e
 
 #### Global variables
+
+if [[ -z "$JLMKR_PATH" && -n "$SCALE_POOL_ROOT" ]]; then
+    SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
+    JLMKR_PATH=${SCALE_POOL_ROOT}/jailmaker
+elif [[ -z "$JLMKR_PATH" ]]; then
+    JLMKR_PATH=${PWD:-.}
+fi
+if [[ ! -r "$JLMKR_PATH/jlmkr.py" ]]; then
+    >&2 printf "%s\n" \
+	"couldn't find jlmkr.py. Are you running from the jailmaker directory?" \
+	"If not, setup either JLMKR_PATH or SCALE_POOL_ROOT" \
+	""
+
+    >&2 printf "\tPWD: %s\n\tJLMKR_PATH: %s\n\tSCALE_POOL_ROOT: %s\n" \
+        "$PWD" "$JLMKR_PATH" "$SCALE_POOL_ROOT"
+
+    >&2 printf "\n"
+    exit 2
+fi
 JAIL_TYPE="${1}"
 if [ -n "${JAIL_TYPE}" ]; then
     if [ -r "${JAIL_TYPE}" ]; then
@@ -14,13 +33,12 @@ if [ -n "${JAIL_TYPE}" ]; then
         # Can't perform full test with config path
         FULL_TEST=0
     else
-        SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
-        JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/templates/$JAIL_TYPE/config"
+        JAIL_CONFIG="$JLMKR_PATH/templates/$JAIL_TYPE/config"
         # Full test is an option when using JAIL_TYPE
         FULL_TEST=${FULL_TEST:-0}
     fi
     if [ ! -r "${JAIL_CONFIG}" ]; then
-        echo "Must supply a valid jail type or config path"
+        >&2 printf "Must supply a valid jail type or config path\n"
         exit 2
     fi
 fi
@@ -39,7 +57,7 @@ WAIT_FOR_JAIL=${WAIT_FOR_JAIL:-4s}
 
 #### Functions
 jlmkr () {
-    "$SCALE_POOL_ROOT/jailmaker/jlmkr.py" "${@:---help}"
+    /usr/bin/env python3 "$JLMKR_PATH/jlmkr.py" "${@:---help}"
 }
 
 iterate () {
@@ -57,7 +75,7 @@ iterate () {
             ${NO_EVAL:+:} eval "JLMKR_${j}_x=\"${x//\"/\'}\""
 
             if [[ -n "$DELAY" ]]; then
-                echo "Waiting ${DELAY} seconds before test..."
+                printf "Waiting %s seconds before test...\n" "${DELAY}"
                 sleep "${DELAY}"
             fi
 
@@ -114,7 +132,7 @@ perform_test_suite() {
         [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(log) \
         && iterate "${TESTS[*]}" 'jlmkr $j $JAIL -n 10'
 
-        [[ "$STOP" =~ ^(0|l|i)$ ]] || echo "Had an Error. Cleanup up and stopping."
+        [[ "$STOP" =~ ^(0|l|i)$ ]] || >&2 printf "Had an Error. Cleanup up and stopping.\n"
         
         # Always perform these cleanup steps, even if something failed
         [[ "$STOP" != l ]] \
@@ -129,7 +147,7 @@ perform_test_suite() {
     printf '\n\nReport for:\n\tCWD: %s\t\tJAIL_CONFIG: %s\n\n' "$(pwd)" "${JAIL_CONFIG}"
 
     # shellcheck disable=SC2016
-    NO_EVAL=1 iterate "${REPORT[*]}" 'echo "$(Jv) ${(Jv)_x:-$j}"' #printf '\"%s jlmkr %s\\n\"' '\$(Jv)' '\$j'"
+    NO_EVAL=1 iterate "${REPORT[*]}" 'echo "$(Jv) ${(Jv)_x:-$j}"'
 }
 
 #### Execution starts here
@@ -141,7 +159,7 @@ if [[ "$STOP" =~ ^(0|i)$ ]]; then
 fi
 
 if [[ "$STOP" =~ ^(0|i)$ ]]; then
-    pushd "$SCALE_POOL_ROOT/jailmaker" > /dev/null || STOP=pushd
+    pushd "$JLMKR_PATH" > /dev/null || STOP=pushd
     STOP=0 # The following test suite should only be run non-interactivley
     
     JAIL_CONFIG="./templates/$JAIL_TYPE/config"
@@ -150,7 +168,7 @@ if [[ "$STOP" =~ ^(0|i)$ ]]; then
     JAIL_CONFIG="templates/$JAIL_TYPE/config"
     perform_test_suite
     
-    JAIL_CONFIG="$SCALE_POOL_ROOT/jailmaker/$JAIL_CONFIG"
+    JAIL_CONFIG="$JLMKR_PATH/$JAIL_CONFIG"
     perform_test_suite
 
     cd ~
@@ -166,9 +184,9 @@ if [[ "$STOP" =~ ^(0|i)$ ]]; then
 fi
 
 if [[ "$STOP" = 0 ]]; then
-    echo "All tests completed"
+    printf "All tests completed\n"
 else
-    echo "Stopped: $STOP"
+    printf "Stopped: %s\n" "$STOP"
     [[ "$STOP" = "Single Test" ]] || exit 1
 fi
 
