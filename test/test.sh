@@ -23,8 +23,6 @@ netstat -n -r
 sleep 3
 ip addr
 resolvectl query deb.debian.org
-ping -c1 1.1.1.1
-ping -c1 deb.debian.org
 EOF
 
 sleep 5
