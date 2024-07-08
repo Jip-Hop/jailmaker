@@ -6,7 +6,7 @@ set -euo pipefail
 
 # TODO: many more test cases and checking if actual output (text, files on disk etc.) is correct instead of just a 0 exit code
 
-./jlmkr.py create --start examiner
+./jlmkr.py create --start examiner --network-bridge=br1 --resolv-conf=bind-host
 echo "About to run debug logging in jail"
 cat <<EOF > jails/examiner/rootfs/root/debug.sh
 for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
