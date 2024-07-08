@@ -45,47 +45,27 @@ jobs:
         run: |
           sudo -s <<END
           apt-get install -qq -y \
-              systemd-container \
-              nftables
+              systemd-container
 
-          echo 1 > /proc/sys/net/ipv4/ip_forward
-          modprobe br_netfilter
-          echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
-          echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
-          modprobe iptable_nat
-          modprobe iptable_filter
+          cat <<NETWORKCONFIG >/etc/systemd/network/10-br1.network
+          [Match]
+          Kind=bridge
+          Name=br1
 
+          [Network]
+          # Default to using a /24 prefix, giving up to 253 addresses per virtual network.
+          Address=0.0.0.0/24
+          LinkLocalAddressing=yes
+          DHCPServer=yes
+          IPMasquerade=both
+          LLDP=yes
+          EmitLLDP=customer-bridge
+          IPv6AcceptRA=no
+          IPv6SendRA=yes
+          NETWORKCONFIG
+
+          systemctl restart systemd-networkd
           ip link add name br1 type bridge
-          ip address add 192.168.123.1/24 dev br1
-                    
-          nft add table nat
-          nft add chain nat prerouting { type nat hook prerouting priority 0 \; }
-          nft add chain nat postrouting { type nat hook postrouting priority 100 \; }
-          nft add rule nat postrouting masquerade
-
-          # dnsmasq can't install with systemd-resolved in its way
-          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
-          systemctl restart systemd-resolved.service
-          apt-get install dnsmasq -y
-
-          cat <<DNSMASQ >/etc/dnsmasq.d/synthetic.conf
-          no-dhcp-interface=eth0
-          interface=br1
-          bind-interfaces
-
-          dhcp-authoritative
-          dhcp-rapid-commit
-          dhcp-range=192.168.123.101,192.168.123.199
-
-          # designated upstream query servers
-          server=1.1.1.1
-          server=1.0.0.1
-          DNSMASQ
-
-          # systemd-resolved should use dnsmasq as its upstream
-          sed -i -e 's/^#DNS=$/DNS=127.0.0.1/' /etc/systemd/resolved.conf
-          systemctl restart systemd-resolved.service || journalctl -xu systemd-resolved.service
-          systemctl restart dnsmasq.service || journalctl -xu dnsmasq.service
           END
 # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
