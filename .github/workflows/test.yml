@@ -66,6 +66,9 @@ jobs:
 
           systemctl restart systemd-networkd
           ip link add name br1 type bridge
+          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
+          systemctl restart systemd-resolved
+          echo 'nameserver 1.1.1.1' > /etc/resolv.conf
           END
 # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
