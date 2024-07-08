@@ -30,6 +30,13 @@ jobs:
       - name: Set up networking resources
         run: |
           sudo -s <<END
+
+          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
+          systemctl stop systemd-resolved
+          systemctl status systemd-resolved
+          rm /etc/resolv.conf
+          echo 'nameserver 1.1.1.1' > /etc/resolv.conf
+          
           apt-get install -qq -y \
               systemd-container
 
@@ -52,9 +59,6 @@ jobs:
 
           systemctl restart systemd-networkd
           ip link add name br1 type bridge
-          sed -i -e 's/^#DNSStubListener=yes$/DNSStubListener=no/' /etc/systemd/resolved.conf
-          systemctl restart systemd-resolved
-          echo 'nameserver 1.1.1.1' > /etc/resolv.conf
           END
 
       # (temporary)
