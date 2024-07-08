@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables -I DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
+iptables -A INPUT -i br1 -p udp -m udp --dport 67 -j ACCEPT
+
 # TODO: create a path and/or zfs pool with a space in it to test if jlmkr.py still works properly when ran from inside
 # mkdir -p "/tmp/path with space/jailmaker"
 
