@@ -25,20 +25,6 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # (temporary)
-      - name: Examine the GitHub-hosted runner environment
-        run: |
-          uname -r
-          cat /etc/os-release
-          python3 --version
-          echo
-          for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
-              echo "✳️ $path"
-              [ -d "$path" ] && ls -la "$path" || cat "$path"
-              echo
-          done
-          ip addr
-
       # Create a network namespace in the GitHub-hosted runner VM,
       # simulating a primary bridge network on TrueNAS SCALE
       - name: Set up networking resources
@@ -70,18 +56,33 @@ jobs:
           systemctl restart systemd-resolved
           echo 'nameserver 1.1.1.1' > /etc/resolv.conf
           END
-# NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
 
-#       # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
-#       # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
-#       - name: Create a parent ZFS dataset
-#         run: |
-#           sudo -s <<END
-#           apt-get install -y -qq zfsutils-linux
-#           modinfo zfs | grep version
-#           zfs --version
-#           zpool --version
-#           END
+      # (temporary)
+      - name: Examine the GitHub-hosted runner environment
+        run: |
+          uname -r
+          cat /etc/os-release
+          python3 --version
+          echo
+          for path in /etc/systemd/network* /etc/systemd/resolve* /etc/resolv.conf ; do
+              echo "✳️ $path"
+              [ -d "$path" ] && ls -la "$path" || cat "$path"
+              echo
+          done
+          ip addr
+
+      # NOTE: <https://github.com/marketplace/actions/tune-github-hosted-runner-network>
+
+      # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
+      # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
+      - name: Create a parent ZFS dataset
+        run: |
+          sudo -s <<END
+          apt-get install -y -qq zfsutils-linux
+          modinfo zfs | grep version
+          zfs --version
+          zpool --version
+          END
 
       # Runs a single command using the runners shell
       - name: Run the test script
