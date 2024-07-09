@@ -1319,7 +1319,7 @@ def create_jail(**kwargs):
             if (
                 value is not None
                 # String, non-empty list of args or int
-                and (len(value) or isinstance(value, int))
+                and (isinstance(value, int) or len(value))
                 and value is not config.my_get(option, None)
             ):
                 # TODO: this will wipe all systemd_nspawn_user_args from the template...
