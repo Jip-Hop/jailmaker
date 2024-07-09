@@ -174,7 +174,9 @@ class KeyValueParser(configparser.ConfigParser):
         # Template to store comments as key value pair
         self._comment_template = "#{0} " + delimiter + " {1}"
         # Regex to match the comment prefix
-        self._comment_regex = re.compile(r"^#\d+\s*" + re.escape(delimiter) + r"[^\S\n]*")
+        self._comment_regex = re.compile(
+            r"^#\d+\s*" + re.escape(delimiter) + r"[^\S\n]*"
+        )
         # Regex to match cosmetic newlines (skips newlines in multiline values):
         # consecutive whitespace from start of line followed by a line not starting with whitespace
         self._cosmetic_newlines_regex = re.compile(r"^(\s+)(?=^\S)", re.MULTILINE)
@@ -538,7 +540,8 @@ def systemd_escape_path(path):
     """
     return "".join(
         map(
-            lambda char: r"\s" if char == " " else "\\\\" if char == "\\" else char, path
+            lambda char: r"\s" if char == " " else "\\\\" if char == "\\" else char,
+            path,
         )
     )
 
@@ -881,7 +884,6 @@ def run_lxc_download_script(
             f"--release={release}",
         ]
 
-
         if rc := subprocess.run(cmd, env={"LXC_CACHE_PATH": lxc_cache}).returncode != 0:
             eprint("Aborting...")
             return rc
@@ -902,7 +904,7 @@ def run_lxc_download_script(
                 line,
             ):
                 print(line)
-        
+
         rc = p1.wait()
         # Currently --list will always return a non-zero exit code, even when listing the images was successful
         # https://github.com/lxc/lxc/pull/4462
@@ -945,8 +947,10 @@ def get_mount_point(path):
         path = os.path.dirname(path)
     return path
 
-def get_relative_path_in_jailmaker_dir(absolute_path):    
+
+def get_relative_path_in_jailmaker_dir(absolute_path):
     return PurePath(absolute_path).relative_to(SCRIPT_DIR_PATH)
+
 
 def get_zfs_dataset(path):
     """
@@ -1285,10 +1289,14 @@ def create_jail(**kwargs):
         if jail_config_path:
             # TODO: fallback to default values for e.g. distro and release if they are not in the config file
             if jail_config_path == "-":
-                print(f"Creating jail {jail_name} from config template passed via stdin.")
+                print(
+                    f"Creating jail {jail_name} from config template passed via stdin."
+                )
                 config.read_string(sys.stdin.read())
             else:
-                print(f"Creating jail {jail_name} from config template {jail_config_path}.")
+                print(
+                    f"Creating jail {jail_name} from config template {jail_config_path}."
+                )
                 if jail_config_path not in config.read(jail_config_path):
                     eprint(f"Failed to read config template {jail_config_path}.")
                     return 1
@@ -1362,9 +1370,12 @@ def create_jail(**kwargs):
         # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        if returncode := run_lxc_download_script(
-            jail_name, jail_path, jail_rootfs_path, distro, release
-        ) != 0:
+        if (
+            returncode := run_lxc_download_script(
+                jail_name, jail_path, jail_rootfs_path, distro, release
+            )
+            != 0
+        ):
             cleanup(jail_path)
             return returncode
 
