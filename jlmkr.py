@@ -870,10 +870,7 @@ def run_lxc_download_script(
 
     stat_chmod(lxc_download_script, 0o700)
 
-    check_exit_code = False
-
     if None not in [jail_name, jail_path, jail_rootfs_path, distro, release]:
-        check_exit_code = True
         cmd = [
             lxc_download_script,
             f"--name={jail_name}",
@@ -883,27 +880,35 @@ def run_lxc_download_script(
             f"--dist={distro}",
             f"--release={release}",
         ]
+
+
+        if rc := subprocess.run(cmd, env={"LXC_CACHE_PATH": lxc_cache}).returncode != 0:
+            eprint("Aborting...")
+            return rc
+
     else:
+        # List images
         cmd = [lxc_download_script, "--list", f"--arch={arch}"]
 
-    p1 = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache}
-    )
+        p1 = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache}
+        )
 
-    for line in iter(p1.stdout.readline, b""):
-        line = line.decode().strip()
-        # Filter out the known incompatible distros
-        if not re.match(
-            r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s",
-            line,
-        ):
-            print(line)
+        for line in iter(p1.stdout.readline, b""):
+            line = line.decode().strip()
+            # Filter out the known incompatible distros
+            if not re.match(
+                r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s",
+                line,
+            ):
+                print(line)
+        
+        rc = p1.wait()
+        # Currently --list will always return a non-zero exit code, even when listing the images was successful
+        # https://github.com/lxc/lxc/pull/4462
+        # Therefore we must currently return 0, to prevent aborting the interactive create process
 
-    p1.wait()
-
-    if check_exit_code and p1.returncode != 0:
-        eprint("Aborting...")
-        return p1.returncode
+        # return rc
 
     return 0
 
@@ -1118,9 +1123,8 @@ def interactive_config():
             input("Press Enter to continue...")
             print()
 
-            returncode = run_lxc_download_script()
-            if returncode != 0:
-                return returncode
+            if run_lxc_download_script() != 0:
+                fail("Failed to list images. Aborting...")
 
             print(
                 dedent(
@@ -1358,10 +1362,10 @@ def create_jail(**kwargs):
         # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        returncode = run_lxc_download_script(
+        if returncode := run_lxc_download_script(
             jail_name, jail_path, jail_rootfs_path, distro, release
-        )
-        if returncode != 0:
+        ) != 0:
+            cleanup(jail_path)
             return returncode
 
         # Assuming the name of your jail is "myjail"
