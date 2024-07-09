@@ -88,5 +88,5 @@ jobs:
           PYTHONUNBUFFERED: 1
         run: |
           sudo chown 0:0 jlmkr.py ./test/test-jlmkr
-          sudo bash ./test/test-jlmkr
-          sudo ./test/test.sh
+          sudo bash ./test/test-jlmkr || sudo journalctl
+          sudo ./test/test.sh || sudo journalctl
