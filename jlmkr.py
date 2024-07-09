@@ -1601,6 +1601,7 @@ def remove_jail(jail_name):
         return 1
 
     # TODO: print which dataset is about to be removed before the user confirmation
+    # TODO: print that all zfs snapshots will be removed if jail has it's own zfs dataset
     check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
 
     if check == jail_name:
