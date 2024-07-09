@@ -89,3 +89,4 @@ jobs:
         run: |
           sudo chown 0:0 jlmkr.py ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
+          sudo ./test/test.sh
