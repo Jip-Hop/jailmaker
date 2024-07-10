@@ -5,32 +5,37 @@ gpu_passthrough_nvidia=0
 seccomp=1
 
 # Use bridge networking to provide an isolated network namespace,
-# so podman can manage firewall rules
-# Alternatively use --network-macvlan=eno1 instead of --network-bridge
-# Ensure to change eno1/br1 to the interface name you want to use
+# so nixos can manage firewall rules
+# Ensure to change br1 to the interface name you want to use
 # You may want to add additional options here, e.g. bind mounts
 systemd_nspawn_user_args=--network-bridge=br1
-    --resolv-conf=bind-host
-    --system-call-filter='add_key keyctl bpf'
+    --bind-ro=./lxd.nix:/etc/nixos/lxd.nix
 
 # Script to run on the HOST before starting the jail
-# Load kernel module and config kernel settings required for podman
-pre_start_hook=#!/usr/bin/bash
+pre_start_hook=#!/usr/bin/env bash
     set -euo pipefail
     echo 'PRE_START_HOOK'
-    echo 1 > /proc/sys/net/ipv4/ip_forward
-    modprobe br_netfilter
-    echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
-    echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
+
+    # If there's no machine-id then this we're about to start the jail for the first time
+    if [ ! -e ./rootfs/etc/machine-id ]; then
+        echo 'BEFORE_FIRST_BOOT'
+        # Create empty nix module to satisfy import in default lxc configuration.nix
+        echo '{ ... }:{}' > ./lxd.nix
+        cp /etc/resolv.conf ./rootfs/etc/resolv.conf
+    fi
 
 # Only used while creating the jail
-distro=fedora
-release=39
+distro=nixos
+release=24.05
 
-# Install podman inside the jail
-initial_setup=#!/usr/bin/bash
-    set -euo pipefail
-    dnf -y install podman
+# # Example initial_setup which rebuild the system,
+# # for when you mount your own /etc/nixos/configuration.nix inside the jail
+# initial_setup=#!/run/current-system/sw/bin/bash
+#     . /etc/bashrc
+#     set -x
+#     ifconfig
+#     nixos-rebuild switch
+#     echo "All Done"
 
 # You generally will not need to change the options below
 systemd_run_default_args=--property=KillMode=mixed

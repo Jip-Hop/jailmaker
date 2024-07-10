@@ -4,7 +4,7 @@
 with full access to all files via bind mounts, \
 thanks to systemd-nspawn!"""
 
-__version__ = "2.0.1"
+__version__ = "2.1.0"
 __author__ = "Jip-Hop"
 __copyright__ = "Copyright (C) 2023, Jip-Hop"
 __license__ = "LGPL-3.0-only"
@@ -115,9 +115,6 @@ systemd_nspawn_default_args=--bind-ro=/sys/module
 # Always add --bind-ro=/sys/module to make lsmod happy
 # https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
 
-JAILS_DIR_PATH = "jails"
-JAIL_CONFIG_NAME = "config"
-JAIL_ROOTFS_NAME = "rootfs"
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
@@ -125,6 +122,9 @@ SCRIPT_PATH = os.path.realpath(__file__)
 SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
 SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
 COMMAND_NAME = os.path.basename(__file__)
+JAILS_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "jails")
+JAIL_CONFIG_NAME = "config"
+JAIL_ROOTFS_NAME = "rootfs"
 SHORTNAME = "jlmkr"
 
 # Only set a color if we have an interactive tty
@@ -174,7 +174,9 @@ class KeyValueParser(configparser.ConfigParser):
         # Template to store comments as key value pair
         self._comment_template = "#{0} " + delimiter + " {1}"
         # Regex to match the comment prefix
-        self._comment_regex = re.compile(f"^#\d+\s*{re.escape(delimiter)}[^\S\n]*")
+        self._comment_regex = re.compile(
+            r"^#\d+\s*" + re.escape(delimiter) + r"[^\S\n]*"
+        )
         # Regex to match cosmetic newlines (skips newlines in multiline values):
         # consecutive whitespace from start of line followed by a line not starting with whitespace
         self._cosmetic_newlines_regex = re.compile(r"^(\s+)(?=^\S)", re.MULTILINE)
@@ -277,6 +279,25 @@ class CustomSubParser(argparse.ArgumentParser):
             super().error(message)
         else:
             raise ExceptionWithParser(self, message)
+
+
+class Chroot:
+    def __init__(self, new_root):
+        self.new_root = new_root
+        self.old_root = None
+        self.initial_cwd = None
+
+    def __enter__(self):
+        self.old_root = os.open("/", os.O_PATH)
+        self.initial_cwd = os.path.abspath(os.getcwd())
+        os.chdir(self.new_root)
+        os.chroot(".")
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.old_root)
+        os.chroot(".")
+        os.close(self.old_root)
+        os.chdir(self.initial_cwd)
 
 
 def eprint(*args, **kwargs):
@@ -471,22 +492,22 @@ def exec_jail(jail_name, cmd):
     ).returncode
 
 
-def status_jail(jail_name):
+def status_jail(jail_name, args):
     """
     Show the status of the systemd service wrapping the jail with given name.
     """
     # Alternatively `machinectl status jail_name` could be used
     return subprocess.run(
-        ["systemctl", "status", f"{SHORTNAME}-{jail_name}"]
+        ["systemctl", "status", f"{SHORTNAME}-{jail_name}", *args]
     ).returncode
 
 
-def log_jail(jail_name):
+def log_jail(jail_name, args):
     """
     Show the log file of the jail with given name.
     """
     return subprocess.run(
-        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}"]
+        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}", *args]
     ).returncode
 
 
@@ -519,7 +540,8 @@ def systemd_escape_path(path):
     """
     return "".join(
         map(
-            lambda char: "\s" if char == " " else "\\\\" if char == "\\" else char, path
+            lambda char: r"\s" if char == " " else "\\\\" if char == "\\" else char,
+            path,
         )
     )
 
@@ -572,7 +594,7 @@ def start_jail(jail_name):
 
     systemd_run_additional_args = [
         f"--unit={SHORTNAME}-{jail_name}",
-        f"--working-directory=./{jail_path}",
+        f"--working-directory={jail_path}",
         f"--description=My nspawn jail {jail_name} [created with jailmaker]",
     ]
 
@@ -658,18 +680,7 @@ def start_jail(jail_name):
     if not os.path.exists(os.path.join(jail_rootfs_path, "etc/machine-id")) and (
         initial_setup := config.my_get("initial_setup")
     ):
-        if not initial_setup.startswith("#!"):
-            initial_setup = "#!/bin/sh\n" + initial_setup
-
-        initial_setup_file_jailed_path = "/root/jlmkr-initial-setup"
-        initial_setup_file_host_path = os.path.abspath(
-            jail_rootfs_path + initial_setup_file_jailed_path
-        )
-
-        # Write a script file to call during initial setup
-        print(initial_setup, file=open(initial_setup_file_host_path, "w"))
-        stat_chmod(initial_setup_file_host_path, 0o700)
-
+        # initial_setup has been assigned due to := expression above
         # Ensure the jail init system is ready before we start the initial_setup
         systemd_nspawn_additional_args += [
             "--notify-ready=yes",
@@ -712,38 +723,56 @@ def start_jail(jail_name):
 
     # Handle initial setup after jail is up and running (for the first time)
     if initial_setup:
-        print("About to run the initial setup.")
+        if not initial_setup.startswith("#!"):
+            initial_setup = "#!/bin/sh\n" + initial_setup
+
+        with tempfile.NamedTemporaryFile(
+            mode="w+t",
+            prefix="jlmkr-initial-setup.",
+            dir=jail_rootfs_path,
+            delete=False,
+        ) as initial_setup_file:
+            # Write a script file to call during initial setup
+            initial_setup_file.write(initial_setup)
+
+        initial_setup_file_name = os.path.basename(initial_setup_file.name)
+        initial_setup_file_host_path = os.path.abspath(initial_setup_file.name)
+        stat_chmod(initial_setup_file_host_path, 0o700)
+
+        print(f"About to run the initial setup script: {initial_setup_file_name}.")
         print("Waiting for networking in the jail to be ready.")
-        print("Please wait (this may take 90s in case of bridge networking with STP is enabled)...")
+        print(
+            "Please wait (this may take 90s in case of bridge networking with STP is enabled)..."
+        )
         returncode = exec_jail(
             jail_name,
             [
                 "--",
                 "systemd-run",
-                f"--unit={os.path.basename(initial_setup_file_jailed_path)}",
+                f"--unit={initial_setup_file_name}",
                 "--quiet",
                 "--pipe",
                 "--wait",
                 "--service-type=exec",
                 "--property=After=network-online.target",
                 "--property=Wants=network-online.target",
-                initial_setup_file_jailed_path,
+                "/" + initial_setup_file_name,
             ],
         )
-
-        # Cleanup the initial_setup_file_host_path
-        if initial_setup_file_host_path:
-            Path(initial_setup_file_host_path).unlink(missing_ok=True)
 
         if returncode != 0:
             eprint("Tried to run the following commands inside the jail:")
             eprint(initial_setup)
             eprint()
+            eprint(f"{RED}{BOLD}Failed to run initial setup...")
             eprint(
-                f"""{RED}{BOLD}Failed to run initial setup... you may want to stop and remove the jail and try again.{NORMAL}"""
+                f"You may want to manually run /{initial_setup_file_name} inside the jail for debugging purposes."
             )
+            eprint(f"Or stop and remove the jail and try again.{NORMAL}")
             return returncode
         else:
+            # Cleanup the initial_setup_file_host_path
+            Path(initial_setup_file_host_path).unlink(missing_ok=True)
             print(f"Done with initial setup of jail {jail_name}!")
 
     return returncode
@@ -766,6 +795,7 @@ def cleanup(jail_path):
     """
     Cleanup jail.
     """
+
     if get_zfs_dataset(jail_path):
         eprint(f"Cleaning up: {jail_path}.")
         remove_zfs_dataset(jail_path)
@@ -775,7 +805,12 @@ def cleanup(jail_path):
         # Should be fixed in Python 3.13 https://stackoverflow.com/a/70549000
         def _onerror(func, path, exc_info):
             exc_type, exc_value, exc_traceback = exc_info
-            if not issubclass(exc_type, FileNotFoundError):
+            if issubclass(exc_type, PermissionError):
+                # Update the file permissions with the immutable and append-only bit cleared
+                subprocess.run(["chattr", "-i", "-a", path])
+                # Reattempt the removal
+                func(path)
+            elif not issubclass(exc_type, FileNotFoundError):
                 raise exc_value
 
         eprint(f"Cleaning up: {jail_path}.")
@@ -838,10 +873,7 @@ def run_lxc_download_script(
 
     stat_chmod(lxc_download_script, 0o700)
 
-    check_exit_code = False
-
     if None not in [jail_name, jail_path, jail_rootfs_path, distro, release]:
-        check_exit_code = True
         cmd = [
             lxc_download_script,
             f"--name={jail_name}",
@@ -851,27 +883,34 @@ def run_lxc_download_script(
             f"--dist={distro}",
             f"--release={release}",
         ]
+
+        if rc := subprocess.run(cmd, env={"LXC_CACHE_PATH": lxc_cache}).returncode != 0:
+            eprint("Aborting...")
+            return rc
+
     else:
+        # List images
         cmd = [lxc_download_script, "--list", f"--arch={arch}"]
 
-    p1 = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache}
-    )
+        p1 = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, env={"LXC_CACHE_PATH": lxc_cache}
+        )
 
-    for line in iter(p1.stdout.readline, b""):
-        line = line.decode().strip()
-        # Filter out the known incompatible distros
-        if not re.match(
-            r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s",
-            line,
-        ):
-            print(line)
+        for line in iter(p1.stdout.readline, b""):
+            line = line.decode().strip()
+            # Filter out the known incompatible distros
+            if not re.match(
+                r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s",
+                line,
+            ):
+                print(line)
 
-    p1.wait()
+        rc = p1.wait()
+        # Currently --list will always return a non-zero exit code, even when listing the images was successful
+        # https://github.com/lxc/lxc/pull/4462
+        # Therefore we must currently return 0, to prevent aborting the interactive create process
 
-    if check_exit_code and p1.returncode != 0:
-        eprint("Aborting...")
-        return p1.returncode
+        # return rc
 
     return 0
 
@@ -909,6 +948,10 @@ def get_mount_point(path):
     return path
 
 
+def get_relative_path_in_jailmaker_dir(absolute_path):
+    return PurePath(absolute_path).relative_to(SCRIPT_DIR_PATH)
+
+
 def get_zfs_dataset(path):
     """
     Get ZFS dataset path.
@@ -938,21 +981,23 @@ def get_zfs_base_path():
     return zfs_base_path
 
 
-def create_zfs_dataset(relative_path):
+def create_zfs_dataset(absolute_path):
     """
-    Create a ZFS Dataset.
-    Receives the dataset to be created relative to the jailmaker script (e.g. "jails" or "jails/newjail").
+    Create a ZFS Dataset inside the jailmaker directory at the provided absolute path.
+    E.g. "/mnt/mypool/jailmaker/jails" or "/mnt/mypool/jailmaker/jails/newjail").
     """
+    relative_path = get_relative_path_in_jailmaker_dir(absolute_path)
     dataset_to_create = os.path.join(get_zfs_base_path(), relative_path)
     eprint(f"Creating ZFS Dataset {dataset_to_create}")
     subprocess.run(["zfs", "create", dataset_to_create], check=True)
 
 
-def remove_zfs_dataset(relative_path):
+def remove_zfs_dataset(absolute_path):
     """
-    Remove a ZFS Dataset.
-    Receives the dataset to be removed relative to the jailmaker script (e.g. "jails/oldjail").
+    Remove a ZFS Dataset inside the jailmaker directory at the provided absolute path.
+    E.g. "/mnt/mypool/jailmaker/jails/oldjail".
     """
+    relative_path = get_relative_path_in_jailmaker_dir(absolute_path)
     dataset_to_remove = os.path.join((get_zfs_base_path()), relative_path)
     eprint(f"Removing ZFS Dataset {dataset_to_remove}")
     subprocess.run(["zfs", "destroy", "-r", dataset_to_remove], check=True)
@@ -1082,9 +1127,8 @@ def interactive_config():
             input("Press Enter to continue...")
             print()
 
-            returncode = run_lxc_download_script()
-            if returncode != 0:
-                return returncode
+            if run_lxc_download_script() != 0:
+                fail("Failed to list images. Aborting...")
 
             print(
                 dedent(
@@ -1200,7 +1244,7 @@ def interactive_config():
 def create_jail(**kwargs):
     print(DISCLAIMER)
 
-    if os.path.basename(os.getcwd()) != "jailmaker":
+    if os.path.basename(SCRIPT_DIR_PATH) != "jailmaker":
         eprint(
             dedent(
                 f"""
@@ -1212,7 +1256,7 @@ def create_jail(**kwargs):
         )
         return 1
 
-    if not PurePath(get_mount_point(os.getcwd())).is_relative_to("/mnt"):
+    if not PurePath(get_mount_point(SCRIPT_DIR_PATH)).is_relative_to("/mnt"):
         print(
             dedent(
                 f"""
@@ -1244,10 +1288,18 @@ def create_jail(**kwargs):
 
         if jail_config_path:
             # TODO: fallback to default values for e.g. distro and release if they are not in the config file
-            print(f"Creating jail {jail_name} from config template {jail_config_path}.")
-            if jail_config_path not in config.read(jail_config_path):
-                eprint(f"Failed to read config template {jail_config_path}.")
-                return 1
+            if jail_config_path == "-":
+                print(
+                    f"Creating jail {jail_name} from config template passed via stdin."
+                )
+                config.read_string(sys.stdin.read())
+            else:
+                print(
+                    f"Creating jail {jail_name} from config template {jail_config_path}."
+                )
+                if jail_config_path not in config.read(jail_config_path):
+                    eprint(f"Failed to read config template {jail_config_path}.")
+                    return 1
         else:
             print(f"Creating jail {jail_name} with default config.")
             config.read_string(DEFAULT_CONFIG)
@@ -1266,7 +1318,8 @@ def create_jail(**kwargs):
             value = kwargs.pop(option)
             if (
                 value is not None
-                and len(value)
+                # String, non-empty list of args or int
+                and (isinstance(value, int) or len(value))
                 and value is not config.my_get(option, None)
             ):
                 # TODO: this will wipe all systemd_nspawn_user_args from the template...
@@ -1279,7 +1332,7 @@ def create_jail(**kwargs):
             print(
                 dedent(
                     f"""
-                    TIP: Run `{COMMAND_NAME} create` without any arguments for interactive config.
+                    Hint: run `{COMMAND_NAME} create` without any arguments for interactive config.
                     Or use CLI args to override the default options.
                     For more info, run: `{COMMAND_NAME} create --help`
                   """
@@ -1318,10 +1371,13 @@ def create_jail(**kwargs):
         # but we don't need it so we will remove it later
         open(jail_config_path, "a").close()
 
-        returncode = run_lxc_download_script(
-            jail_name, jail_path, jail_rootfs_path, distro, release
-        )
-        if returncode != 0:
+        if (
+            returncode := run_lxc_download_script(
+                jail_name, jail_path, jail_rootfs_path, distro, release
+            )
+            != 0
+        ):
+            cleanup(jail_path)
             return returncode
 
         # Assuming the name of your jail is "myjail"
@@ -1347,11 +1403,13 @@ def create_jail(**kwargs):
         # But alpine jails made with jailmaker have other issues
         # They don't shutdown cleanly via systemctl and machinectl...
 
+        with Chroot(jail_rootfs_path):
+            # Use chroot to correctly resolve absolute /sbin/init symlink
+            init_system_name = os.path.basename(os.path.realpath("/sbin/init"))
+
         if (
-            os.path.basename(
-                os.path.realpath(os.path.join(jail_rootfs_path, "sbin/init"))
-            )
-            != "systemd"
+            init_system_name != "systemd"
+            and parse_os_release(jail_rootfs_path).get("ID") != "nixos"
         ):
             print(
                 dedent(
@@ -1379,9 +1437,10 @@ def create_jail(**kwargs):
             config.my_set("startup", 0)
             start_now = False
 
+        # Remove config which systemd handles for us
         with contextlib.suppress(FileNotFoundError):
-            # Remove config which systemd handles for us
             os.remove(os.path.join(jail_rootfs_path, "etc/machine-id"))
+        with contextlib.suppress(FileNotFoundError):
             os.remove(os.path.join(jail_rootfs_path, "etc/resolv.conf"))
 
         # https://github.com/systemd/systemd/issues/852
@@ -1558,6 +1617,7 @@ def remove_jail(jail_name):
         return 1
 
     # TODO: print which dataset is about to be removed before the user confirmation
+    # TODO: print that all zfs snapshots will be removed if jail has it's own zfs dataset
     check = input(f'\nCAUTION: Type "{jail_name}" to confirm jail deletion!\n\n')
 
     if check == jail_name:
@@ -1616,16 +1676,21 @@ def get_all_jail_names():
     return jail_names
 
 
-def parse_os_release(candidates):
-    for candidate in candidates:
-        try:
-            with open(candidate, encoding="utf-8") as f:
-                # TODO: can I create a solution which not depends on the internal _parse_os_release method?
-                return platform._parse_os_release(f)
-        except OSError:
-            # Silently ignore failing to read os release info
-            pass
-    return {}
+def parse_os_release(new_root):
+    result = {}
+    with Chroot(new_root):
+        # Use chroot to correctly resolve os-release symlink (for nixos)
+        for candidate in ["/etc/os-release", "/usr/lib/os-release"]:
+            try:
+                with open(candidate, encoding="utf-8") as f:
+                    # TODO: can I create a solution which not depends on the internal _parse_os_release method?
+                    result = platform._parse_os_release(f)
+                    break
+            except OSError:
+                # Silently ignore failing to read os release info
+                pass
+
+    return result
 
 
 def list_jails():
@@ -1680,13 +1745,7 @@ def list_jails():
                     jail["addresses"] += "…"
         else:
             # Parse os-release info ourselves
-            jail_platform = parse_os_release(
-                (
-                    os.path.join(jail_rootfs_path, "etc/os-release"),
-                    os.path.join(jail_rootfs_path, "usr/lib/os-release"),
-                )
-            )
-
+            jail_platform = parse_os_release(jail_rootfs_path)
             jail["os"] = jail_platform.get("ID")
             jail["version"] = jail_platform.get("VERSION_ID") or jail_platform.get(
                 "VERSION_CODENAME"
@@ -1775,7 +1834,7 @@ def main():
         title="commands", dest="command", metavar="", parser_class=CustomSubParser
     )
 
-    split_commands = ["create", "exec"]
+    split_commands = ["create", "exec", "log", "status"]
     commands = {}
 
     for d in [
@@ -1863,6 +1922,18 @@ def main():
         help="args to pass to machinectl shell",
     )
 
+    commands["log"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to journalctl",
+    )
+
+    commands["status"].add_argument(
+        "args",
+        nargs="*",
+        help="args to pass to systemctl",
+    )
+
     commands["create"].add_argument(
         "jail_name",  #
         nargs="?",
@@ -1890,7 +1961,7 @@ def main():
     commands["create"].add_argument(
         "-c",  #
         "--config",
-        help="path to config file template",
+        help="path to config file template or - for stdin",
     )
     commands["create"].add_argument(
         "-gi",  #
@@ -1917,9 +1988,6 @@ def main():
     # Set appropriate permissions (if not already set) for this file, since it's executed as root
     stat_chmod(SCRIPT_PATH, 0o700)
 
-    # Work relative to this script
-    os.chdir(SCRIPT_DIR_PATH)
-
     # Ignore all args after the first "--"
     args_to_parse = split_at_string(sys.argv[1:], "--")[0]
     # Check for help
@@ -1943,7 +2011,6 @@ def main():
                     args = vars(parser.parse_known_args(args_to_parse)[0])
                     # ...and check if help is still in the remaining args
                     need_help = args.get("help")
-                    print(need_help)
 
                 if need_help:
                     commands[command].print_help()

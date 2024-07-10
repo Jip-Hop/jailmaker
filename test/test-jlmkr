@@ -1,0 +1,192 @@
+#! /usr/bin/env bash
+
+# Example invokation
+# sudo SCALE_POOL_ROOT=$SCALE_POOL_ROOT $SCALE_POOL_ROOT/jailmaker/test/test-jlmkr docker
+
+set -e
+
+#### Global variables
+
+if [[ -z "$JLMKR_PATH" && -n "$SCALE_POOL_ROOT" ]]; then
+    SCALE_POOL_ROOT=${SCALE_POOL_ROOT:?must be exported before you can run test suite}
+    JLMKR_PATH=${SCALE_POOL_ROOT}/jailmaker
+elif [[ -z "$JLMKR_PATH" ]]; then
+    JLMKR_PATH=${PWD:-.}
+fi
+if [[ ! -r "$JLMKR_PATH/jlmkr.py" ]]; then
+    >&2 printf "%s\n" \
+	"couldn't find jlmkr.py. Are you running from the jailmaker directory?" \
+	"If not, setup either JLMKR_PATH or SCALE_POOL_ROOT" \
+	""
+
+    >&2 printf "\tPWD: %s\n\tJLMKR_PATH: %s\n\tSCALE_POOL_ROOT: %s\n" \
+        "$PWD" "$JLMKR_PATH" "$SCALE_POOL_ROOT"
+
+    >&2 printf "\n"
+    exit 2
+fi
+JAIL_TYPE="${1}"
+if [ -n "${JAIL_TYPE}" ]; then
+    if [ -r "${JAIL_TYPE}" ]; then
+        JAIL_CONFIG="$JAIL_TYPE"
+        JAIL_TYPE=
+        # Can't perform full test with config path
+        FULL_TEST=0
+    else
+        JAIL_CONFIG="$JLMKR_PATH/templates/$JAIL_TYPE/config"
+        # Full test is an option when using JAIL_TYPE
+        FULL_TEST=${FULL_TEST:-0}
+    fi
+    if [ ! -r "${JAIL_CONFIG}" ]; then
+        >&2 printf "Must supply a valid jail type or config path\n"
+        exit 2
+    fi
+fi
+
+# shellcheck disable=SC2034 # JAIL is used inside perform_test_suite
+JAIL="${2:-${JAIL_TYPE:-default}-test}"
+
+# STOP=0 - (default) perform all tests, in non-blocking mode 
+# STOP=l - only list and images, nothing else
+# STOP=i - interactive test, includ console-blocking waiting for input tests (edit and shell)
+STOP=${STOP:-0}
+
+REPORT=(create edit exec images list log remove restart shell start status stop)
+
+WAIT_FOR_JAIL=${WAIT_FOR_JAIL:-4s}
+
+#### Functions
+jlmkr () {
+    /usr/bin/env python3 "$JLMKR_PATH/jlmkr.py" "${@:---help}"
+}
+
+iterate () {
+    # shellcheck disable=SC2206 # $1 will pass multiple values, we want splitting here
+    local SET=($1) DO=("${@:2}")
+    local x j _x x_STATUS
+
+    for j in "${SET[@]}"; do
+        for _x in "${DO[@]}"; do
+            x="${_x//\(Jv)/JLMKR_"$j"}"
+            # echo "$x" >&2
+            ${NO_EVAL:+:} eval "echo \$JLMKR_${j} \"$x\""
+            x_STATUS=✅
+            ${NO_EVAL:+:} eval "JLMKR_$j=$x_STATUS"
+            ${NO_EVAL:+:} eval "JLMKR_${j}_x=\"${x//\"/\'}\""
+
+            if [[ -n "$DELAY" ]]; then
+                printf "Waiting %s seconds before test...\n" "${DELAY}"
+                sleep "${DELAY}"
+            fi
+
+            set +e
+            eval "$x" || x_STATUS=$?
+            set -e
+            if [[ "$x_STATUS" != "✅" ]]; then
+                ${NO_EVAL:+:} eval "JLMKR_${j}_x=\"($x_STATUS) ${x//\"/\'}\""
+                ${NO_EVAL:+:} eval "JLMKR_$j=❌"
+                STOP=E:$x_STATUS
+                return
+            fi
+        done
+    done
+}
+
+perform_test_suite() {
+    # shellcheck disable=SC2016 # function relies heavily on single quotes preventing expansion
+
+    if [[ "$STOP" =~ ^(0|l|i)$ ]]; then
+        # Initialize REPORT with empty checkboxes - NO_EVAL=1 is important here, otherwise Status will be evaluated
+        NO_EVAL=1 iterate "${REPORT[*]}" '(Jv)="🔳"'
+
+        TESTS=(list images)
+        iterate "${TESTS[*]}" 'jlmkr $j'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(create) \
+        && iterate "${TESTS[*]}" 'jlmkr $j ${JAIL_CONFIG:+--config} $JAIL_CONFIG $JAIL'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(start) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(restart) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        # If this is an interactive test, edit and shell will wait for input
+        [[ "$STOP" == "i" ]] && TESTS=(edit shell) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL'
+
+        # This is the non-interactive test for edit
+        [[ "$STOP" == "0" ]] && TESTS=(edit) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'EDITOR=cat jlmkr $j $JAIL'
+
+        # This is the non-interactive test for shell
+        [[ "$STOP" == "0" ]] && TESTS=(shell) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo shell called successful"'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(exec) \
+        && DELAY=$WAIT_FOR_JAIL iterate "${TESTS[*]}" 'jlmkr $j $JAIL /bin/sh -c "echo exec called successful"'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(status) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL --no-pager'
+
+        [[ "$STOP" =~ ^(0|i)$ ]] && TESTS=(log) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL -n 10'
+
+        [[ "$STOP" =~ ^(0|l|i)$ ]] || >&2 printf "Had an Error. Cleanup up and stopping.\n"
+        
+        # Always perform these cleanup steps, even if something failed
+        [[ "$STOP" != l ]] \
+        && TESTS=(stop) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL' \
+
+        [[ "$STOP" != l ]] \
+        && TESTS=(remove) \
+        && iterate "${TESTS[*]}" 'jlmkr $j $JAIL <<<"$JAIL" '
+    
+    fi
+    printf '\n\nReport for:\n\tCWD: %s\t\tJAIL_CONFIG: %s\n\n' "$(pwd)" "${JAIL_CONFIG}"
+
+    # shellcheck disable=SC2016
+    NO_EVAL=1 iterate "${REPORT[*]}" 'echo "$(Jv) ${(Jv)_x:-$j}"'
+}
+
+#### Execution starts here
+
+perform_test_suite
+
+if [[ "$STOP" =~ ^(0|i)$ ]]; then
+    [[ "$FULL_TEST" == 1 ]] || STOP="Single Test"
+fi
+
+if [[ "$STOP" =~ ^(0|i)$ ]]; then
+    pushd "$JLMKR_PATH" > /dev/null || STOP=pushd
+    STOP=0 # The following test suite should only be run non-interactivley
+    
+    JAIL_CONFIG="./templates/$JAIL_TYPE/config"
+    perform_test_suite
+    
+    JAIL_CONFIG="templates/$JAIL_TYPE/config"
+    perform_test_suite
+    
+    JAIL_CONFIG="$JLMKR_PATH/$JAIL_CONFIG"
+    perform_test_suite
+
+    cd ~
+    perform_test_suite
+
+    TMP_JAIL_CFG=$(mktemp) \
+    && cp "$JAIL_CONFIG" "$TMP_JAIL_CFG" \
+    && JAIL_CONFIG="${TMP_JAIL_CFG}" perform_test_suite \
+    && rm "$TMP_JAIL_CFG" \
+    || STOP=E:temp_file
+    
+    popd > /dev/null || STOP=popd
+fi
+
+if [[ "$STOP" = 0 ]]; then
+    printf "All tests completed\n"
+else
+    printf "Stopped: %s\n" "$STOP"
+    [[ "$STOP" = "Single Test" ]] || exit 1
+fi
+

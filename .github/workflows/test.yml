@@ -6,9 +6,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events for any branch
   push:
-    branches: [ "**" ]
+    branches: ["**"]
   pull_request:
-    branches: [ "**" ]
+    branches: ["**"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  test:
     # The type of runner that the job will run on
     runs-on: ubuntu-24.04
 
@@ -25,6 +25,68 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: sudo ./test/test.sh
+      - name: Tune GitHub-hosted runner network
+        uses: smorimoto/tune-github-hosted-runner-network@v1
+
+      # Create a network namespace in the GitHub-hosted runner VM,
+      # simulating a primary bridge network on TrueNAS SCALE
+      - name: Set up networking resources
+        run: |
+          sudo -s <<END
+
+          systemctl disable systemd-resolved --now
+          rm /etc/resolv.conf
+          echo 'nameserver 1.1.1.1' > /etc/resolv.conf
+
+          apt-get install -qq -y systemd-container
+
+          cat <<NETWORKCONFIG >/etc/systemd/network/10-br1.network
+          [Match]
+          Kind=bridge
+          Name=br1
+
+          [Network]
+          # Default to using a /24 prefix, giving up to 253 addresses per virtual network.
+          Address=0.0.0.0/24
+          LinkLocalAddressing=yes
+          DHCPServer=yes
+          IPMasquerade=both
+          LLDP=yes
+          EmitLLDP=customer-bridge
+          IPv6AcceptRA=no
+          IPv6SendRA=yes
+          NETWORKCONFIG
+
+          systemctl restart systemd-networkd
+          ip link add name br1 type bridge
+
+          iptables -I DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+          iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
+          END
+
+      - name: Examine the GitHub-hosted runner environment
+        run: |
+          uname -r
+          cat /etc/os-release
+          python3 --version
+          ip addr
+
+      # # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
+      # # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
+      # - name: Create a parent ZFS dataset
+      #   run: |
+      #     sudo -s <<END
+      #     apt-get install -y -qq zfsutils-linux
+      #     modinfo zfs | grep version
+      #     zfs --version
+      #     zpool --version
+      #     END
+
+      # Run multiple commands using the runners shell
+      - name: Run the test script
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          sudo chown 0:0 jlmkr.py ./test/test-jlmkr
+          sudo bash ./test/test-jlmkr
+          sudo ./test/test.sh
