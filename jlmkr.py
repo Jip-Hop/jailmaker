@@ -20,7 +20,6 @@ import json
 import os
 import platform
 import re
-import readline
 import shlex
 import shutil
 import stat
@@ -817,17 +816,6 @@ def cleanup(jail_path):
         shutil.rmtree(jail_path, onerror=_onerror)
 
 
-def input_with_default(prompt, default):
-    """
-    Ask user for input with a default value already provided.
-    """
-    readline.set_startup_hook(lambda: readline.insert_text(default))
-    try:
-        return input(prompt)
-    finally:
-        readline.set_startup_hook()
-
-
 def validate_sha256(file_path, digest):
     """
     Validates if a file matches a sha256 digest.
@@ -903,6 +891,8 @@ def run_lxc_download_script(
                 r"^(alpine|amazonlinux|busybox|devuan|funtoo|openwrt|plamo|voidlinux)\s",
                 line,
             ):
+                # TODO: check if output matches expected output, if it does then return 0
+                # Else treat this as an error and return 1
                 print(line)
 
         rc = p1.wait()
@@ -921,21 +911,6 @@ def stat_chmod(file_path, mode):
     """
     if mode != stat.S_IMODE(os.stat(file_path).st_mode):
         os.chmod(file_path, mode)
-
-
-def agree(question, default=None):
-    """
-    Ask user a yes/no question.
-    """
-    hint = "[Y/n]" if default == "y" else ("[y/N]" if default == "n" else "[y/n]")
-
-    while True:
-        user_input = input(f"{question} {hint} ") or default
-
-        if user_input.lower() in ["y", "n"]:
-            return user_input.lower() == "y"
-
-        eprint("Invalid input. Please type 'y' for yes or 'n' for no and press enter.")
 
 
 def get_mount_point(path):
@@ -1043,20 +1018,6 @@ def check_jail_name_available(jail_name, warn=True):
     return False
 
 
-def ask_jail_name(jail_name=""):
-    while True:
-        print()
-        jail_name = input_with_default("Enter jail name: ", jail_name).strip()
-        if check_jail_name_valid(jail_name):
-            if check_jail_name_available(jail_name):
-                return jail_name
-
-
-def agree_with_default(config, key, question):
-    default_answer = "y" if config.my_getboolean(key) else "n"
-    config.my_set(key, agree(question, default_answer))
-
-
 def get_text_editor():
     def get_from_environ(key):
         if editor := os.environ.get(key):
@@ -1069,176 +1030,6 @@ def get_text_editor():
         or shutil.which("/usr/bin/editor")
         or "nano"
     )
-
-
-def interactive_config():
-    config = KeyValueParser()
-    config.read_string(DEFAULT_CONFIG)
-
-    recommended_distro = config.my_get("distro")
-    recommended_release = config.my_get("release")
-
-    #################
-    # Config handling
-    #################
-    jail_name = ""
-
-    print()
-    if agree("Do you wish to create a jail from a config template?", "n"):
-        print(
-            dedent(
-                """
-            A text editor will open so you can provide the config template.
-
-              1. Please copy your config
-              2. Paste it into the text editor
-              3. Save and close the text editor
-        """
-            )
-        )
-        input("Press Enter to open the text editor.")
-
-        with tempfile.NamedTemporaryFile(mode="w+t") as f:
-            subprocess.call([get_text_editor(), f.name])
-            f.seek(0)
-            # Start over with a new KeyValueParser to parse user config
-            config = KeyValueParser()
-            config.read_file(f)
-
-        # Ask for jail name
-        jail_name = ask_jail_name(jail_name)
-    else:
-        print()
-        if not agree(
-            f"Install the recommended image ({recommended_distro} {recommended_release})?",
-            "y",
-        ):
-            print(
-                dedent(
-                    f"""
-                {YELLOW}{BOLD}WARNING: ADVANCED USAGE{NORMAL}
-
-                You may now choose from a list which distro to install.
-                But not all of them may work with {COMMAND_NAME} since these images are made for LXC.
-                Distros based on systemd probably work (e.g. Ubuntu, Arch Linux and Rocky Linux).
-            """
-                )
-            )
-            input("Press Enter to continue...")
-            print()
-
-            if run_lxc_download_script() != 0:
-                fail("Failed to list images. Aborting...")
-
-            print(
-                dedent(
-                    """
-                Choose from the DIST column.
-            """
-                )
-            )
-
-            config.my_set("distro", input("Distro: "))
-
-            print(
-                dedent(
-                    """
-                Choose from the RELEASE column (or ARCH if RELEASE is empty).
-            """
-                )
-            )
-
-            config.my_set("release", input("Release: "))
-
-        jail_name = ask_jail_name(jail_name)
-
-        print()
-        agree_with_default(
-            config, "gpu_passthrough_intel", "Passthrough the intel GPU (if present)?"
-        )
-        print()
-        agree_with_default(
-            config, "gpu_passthrough_nvidia", "Passthrough the nvidia GPU (if present)?"
-        )
-
-        print(
-            dedent(
-                f"""
-            {YELLOW}{BOLD}WARNING: CHECK SYNTAX{NORMAL}
-
-            You may pass additional flags to systemd-nspawn.
-            With incorrect flags the jail may not start.
-            It is possible to correct/add/remove flags post-install.
-        """
-            )
-        )
-
-        if agree("Show the man page for systemd-nspawn?", "n"):
-            subprocess.run(["man", "systemd-nspawn"])
-        else:
-            try:
-                base_os_version = platform.freedesktop_os_release().get(
-                    "VERSION_CODENAME", recommended_release
-                )
-            except AttributeError:
-                base_os_version = recommended_release
-            print(
-                dedent(
-                    f"""
-                You may read the systemd-nspawn manual online:
-                https://manpages.debian.org/{base_os_version}/systemd-container/systemd-nspawn.1.en.html"""
-                )
-            )
-
-        # Backslashes and colons need to be escaped in bind mount options:
-        # e.g. to bind mount a file called:
-        # weird chars :?\"
-        # the corresponding command would be:
-        # --bind-ro='/mnt/data/weird chars \:?\\"'
-
-        print(
-            dedent(
-                """
-            Would you like to add additional systemd-nspawn flags?
-            For example to mount directories inside the jail you may:
-            Mount the TrueNAS location /mnt/pool/dataset to the /home directory of the jail with:
-            --bind='/mnt/pool/dataset:/home'
-            Or the same, but readonly, with:
-            --bind-ro='/mnt/pool/dataset:/home'
-            Or create macvlan interface with:
-            --network-macvlan=eno1 --resolv-conf=bind-host
-        """
-            )
-        )
-
-        config.my_set(
-            "systemd_nspawn_user_args",
-            "\n    ".join(shlex.split(input("Additional flags: ") or "")),
-        )
-
-        print(
-            dedent(
-                f"""
-            The `{COMMAND_NAME} startup` command can automatically start a selection of jails.
-            This comes in handy when you want to automatically start multiple jails after booting TrueNAS SCALE (e.g. from a Post Init Script).
-        """
-            )
-        )
-
-        config.my_set(
-            "startup",
-            agree(
-                f"Do you want to start this jail when running: {COMMAND_NAME} startup?",
-                "n",
-            ),
-        )
-
-    print()
-    start_now = agree("Do you want to start this jail now (when create is done)?", "y")
-
-    print()
-
-    return jail_name, config, start_now
 
 
 def create_jail(**kwargs):
@@ -1270,76 +1061,54 @@ def create_jail(**kwargs):
             )
         )
 
-    jail_name = kwargs.pop("jail_name", None)
+    jail_name = kwargs.pop("jail_name")
     start_now = False
 
-    # Non-interactive create
-    if jail_name:
-        if not check_jail_name_valid(jail_name):
-            return 1
+    if not check_jail_name_valid(jail_name):
+        return 1
 
-        if not check_jail_name_available(jail_name):
-            return 1
+    if not check_jail_name_available(jail_name):
+        return 1
 
-        start_now = kwargs.pop("start", start_now)
-        jail_config_path = kwargs.pop("config")
+    start_now = kwargs.pop("start", start_now)
+    jail_config_path = kwargs.pop("config")
 
-        config = KeyValueParser()
+    config = KeyValueParser()
 
-        if jail_config_path:
-            # TODO: fallback to default values for e.g. distro and release if they are not in the config file
-            if jail_config_path == "-":
-                print(
-                    f"Creating jail {jail_name} from config template passed via stdin."
-                )
-                config.read_string(sys.stdin.read())
-            else:
-                print(
-                    f"Creating jail {jail_name} from config template {jail_config_path}."
-                )
-                if jail_config_path not in config.read(jail_config_path):
-                    eprint(f"Failed to read config template {jail_config_path}.")
-                    return 1
+    if jail_config_path:
+        # TODO: fallback to default values for e.g. distro and release if they are not in the config file
+        if jail_config_path == "-":
+            print(f"Creating jail {jail_name} from config template passed via stdin.")
+            config.read_string(sys.stdin.read())
         else:
-            print(f"Creating jail {jail_name} with default config.")
-            config.read_string(DEFAULT_CONFIG)
-
-        user_overridden = False
-
-        for option in [
-            "distro",
-            "gpu_passthrough_intel",
-            "gpu_passthrough_nvidia",
-            "release",
-            "seccomp",
-            "startup",
-            "systemd_nspawn_user_args",
-        ]:
-            value = kwargs.pop(option)
-            if (
-                value is not None
-                # String, non-empty list of args or int
-                and (isinstance(value, int) or len(value))
-                and value is not config.my_get(option, None)
-            ):
-                # TODO: this will wipe all systemd_nspawn_user_args from the template...
-                # Should there be an option to append them instead?
-                print(f"Overriding {option} config value with {value}.")
-                config.my_set(option, value)
-                user_overridden = True
-
-        if not user_overridden:
-            print(
-                dedent(
-                    f"""
-                    Hint: run `{COMMAND_NAME} create` without any arguments for interactive config.
-                    Or use CLI args to override the default options.
-                    For more info, run: `{COMMAND_NAME} create --help`
-                  """
-                )
-            )
+            print(f"Creating jail {jail_name} from config template {jail_config_path}.")
+            if jail_config_path not in config.read(jail_config_path):
+                eprint(f"Failed to read config template {jail_config_path}.")
+                return 1
     else:
-        jail_name, config, start_now = interactive_config()
+        print(f"Creating jail {jail_name} with default config.")
+        config.read_string(DEFAULT_CONFIG)
+
+    for option in [
+        "distro",
+        "gpu_passthrough_intel",
+        "gpu_passthrough_nvidia",
+        "release",
+        "seccomp",
+        "startup",
+        "systemd_nspawn_user_args",
+    ]:
+        value = kwargs.pop(option)
+        if (
+            value is not None
+            # String, non-empty list of args or int
+            and (isinstance(value, int) or len(value))
+            and value is not config.my_get(option, None)
+        ):
+            # TODO: this will wipe all systemd_nspawn_user_args from the template...
+            # Should there be an option to append them instead?
+            print(f"Overriding {option} config value with {value}.")
+            config.my_set(option, value)
 
     jail_path = get_jail_path(jail_name)
 
@@ -1801,6 +1570,7 @@ def add_parser(subparser, **kwargs):
         add_help = True
 
     kwargs["epilog"] = DISCLAIMER
+    kwargs["formatter_class"] = argparse.RawDescriptionHelpFormatter
     kwargs["exit_on_error"] = False
     func = kwargs.pop("func")
     parser = subparser.add_parser(**kwargs)
@@ -1825,7 +1595,10 @@ def main():
         )
 
     parser = argparse.ArgumentParser(
-        description=__doc__, epilog=DISCLAIMER, allow_abbrev=False
+        description=__doc__,
+        allow_abbrev=False,
+        epilog=f"For more info on some command, run: {COMMAND_NAME} some_command --help.\n{DISCLAIMER}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument("--version", action="version", version=__version__)
@@ -1907,7 +1680,17 @@ def main():
     ]:
         commands[d["name"]] = add_parser(subparsers, **d)
 
-    for cmd in ["edit", "exec", "log", "remove", "restart", "start", "status", "stop"]:
+    for cmd in [
+        "create",
+        "edit",
+        "exec",
+        "log",
+        "remove",
+        "restart",
+        "start",
+        "status",
+        "stop",
+    ]:
         commands[cmd].add_argument("jail_name", help="name of the jail")
 
     commands["exec"].add_argument(
@@ -1934,11 +1717,6 @@ def main():
         help="args to pass to systemctl",
     )
 
-    commands["create"].add_argument(
-        "jail_name",  #
-        nargs="?",
-        help="name of the jail",
-    )
     commands["create"].add_argument("--distro")
     commands["create"].add_argument("--release")
     commands["create"].add_argument(
@@ -2037,13 +1815,8 @@ def main():
     if not command:
         # Parse args and show error for unknown args
         parser.parse_args(args_to_parse)
-
-        if agree("Create a new jail?", "y"):
-            print()
-            sys.exit(create_jail())
-        else:
-            parser.print_help()
-            sys.exit()
+        parser.print_help()
+        sys.exit()
 
     elif command == "shell":
         # Pass anything after the "shell" command to machinectl
