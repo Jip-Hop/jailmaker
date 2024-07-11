@@ -1717,8 +1717,12 @@ def main():
         help="args to pass to systemctl",
     )
 
-    commands["create"].add_argument("--distro")
-    commands["create"].add_argument("--release")
+    commands["create"].add_argument(
+        "--distro", metavar="X", help="desired DIST from the images list"
+    )
+    commands["create"].add_argument(
+        "--release", metavar="X", help="desired RELEASE from the images list"
+    )
     commands["create"].add_argument(
         "--start",  #
         help="start jail after create",
@@ -1739,6 +1743,7 @@ def main():
     commands["create"].add_argument(
         "-c",  #
         "--config",
+        metavar="X",
         help="path to config file template or - for stdin",
     )
     commands["create"].add_argument(
@@ -1755,6 +1760,7 @@ def main():
     )
     commands["create"].add_argument(
         "systemd_nspawn_user_args",
+        metavar="nspawn_args",
         nargs="*",
         help="add additional systemd-nspawn flags",
     )
