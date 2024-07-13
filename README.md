@@ -212,6 +212,35 @@ TODO: write comparison between systemd-nspawn (without `jailmaker`), LXC, VMs, D
 
 The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
 
+## Development
+
+After cloning the project, navigate into its working directory and create a self-contained Python [virtual environment](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-and-using-virtual-environments).
+
+    python3 -m venv --no-setuptools .venv
+
+> *Note: Due to [NAS-130029](https://ixsystems.atlassian.net/browse/NAS-130029), the user's safe working Python environment can only be bootstrapped from TrueNAS SCALE's [developer mode](https://www.truenas.com/docs/scale/scaletutorials/systemsettings/advanced/developermode/), or in a jail or elsewhere. If you like to take long walks with strangers, the following might suffice as an alternative to the above one-liner.*
+>
+> ```
+> curl -L https://github.com/brettcannon/microvenv/archive/refs/tags/v2023.5.tar.gz | tar xz --strip-components=1 microvenv-2023.5/microvenv
+> python3 -m microvenv
+> curl -OL https://bootstrap.pypa.io/pip/pip.pyz
+> .venv/bin/python3 pip.pyz install virtualenv
+> .venv/bin/virtualenv --no-setuptools .venv
+> rm -rf microvenv pip.pyz
+> ```
+
+Activate the venv into your *current* shell session.
+
+    source .venv/bin/activate
+
+Develop away. Note that when you're done, you can undo this activation and return to the system's default Python environment. Just call a function that activation has inserted into your shell session:
+
+    deactivate
+
+For more information on Python standard venvs, go to [the source](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-and-using-virtual-environments).
+
+*TODO: introduce the tools we use for building, testing, and stylechecking.*
+
 ## Filing Issues and Community Support
 
 When in need of help or when you think you've found a bug in `jailmaker`, [please start with reading this](https://github.com/Jip-Hop/jailmaker/discussions/135).
