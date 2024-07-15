@@ -1116,15 +1116,7 @@ def create_jail(**kwargs):
     return 0
 
 
-def jail_is_running(jail_name):
-    return (
-        subprocess.run(
-            ["machinectl", "show", jail_name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode
-        == 0
-    )
+from utils.jail_dataset import jail_is_running
 
 
 def edit_jail(jail_name):

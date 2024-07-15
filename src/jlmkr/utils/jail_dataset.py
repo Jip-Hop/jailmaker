@@ -4,7 +4,7 @@
 
 import os.path
 import platform
-
+import subprocess
 
 from utils.chroot import Chroot
 from utils.paths import JAILS_DIR_PATH, JAIL_CONFIG_NAME, JAIL_ROOTFS_NAME
@@ -37,3 +37,14 @@ def parse_os_release(new_root):
                 pass
 
     return result
+
+
+def jail_is_running(jail_name):
+    return (
+        subprocess.run(
+            ["machinectl", "show", jail_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
