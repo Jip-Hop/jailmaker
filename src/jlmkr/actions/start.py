@@ -10,9 +10,10 @@ import tempfile
 from pathlib import Path
 from textwrap import dedent
 
-from paths import SHORTNAME, JAIL_ROOTFS_NAME
+from actions.exec import exec_jail
+from paths import COMMAND_NAME, SHORTNAME, JAIL_ROOTFS_NAME
 from utils.config_parser import parse_config_file
-from utils.console import eprint
+from utils.console import eprint, RED, BOLD, NORMAL
 from utils.dataset import get_jail_config_path, get_jail_rootfs_path
 from utils.dataset import get_jail_path, jail_is_running
 from utils.files import stat_chmod
