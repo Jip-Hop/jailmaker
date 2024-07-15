@@ -1287,15 +1287,6 @@ def run_command_and_parse_json(command):
         return None
 
 
-def get_all_jail_names():
-    try:
-        jail_names = os.listdir(JAILS_DIR_PATH)
-    except FileNotFoundError:
-        jail_names = []
-
-    return jail_names
-
-
 def list_jails():
     """
     List all available and running jails.
