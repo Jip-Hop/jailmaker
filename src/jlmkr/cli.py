@@ -6,9 +6,11 @@ import argparse
 import os
 import sys
 
-from __main__ import __version__, __disclaimer__
+from __main__ import __version__
 from data import DISCLAIMER
 from paths import SCRIPT_PATH, COMMAND_NAME, SCRIPT_NAME
+from utils.config_parser import ExceptionWithParser
+from utils.console import fail
 from utils.editor import get_text_editor
 from utils.files import stat_chmod
 
