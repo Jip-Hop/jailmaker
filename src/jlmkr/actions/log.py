@@ -4,7 +4,7 @@
 
 import subprocess
 
-from utils.paths import SHORTNAME
+from paths import SHORTNAME
 
 
 def log_jail(jail_name, args):

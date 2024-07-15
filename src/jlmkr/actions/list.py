@@ -6,8 +6,9 @@ import json
 import subprocess
 
 from collections import defaultdict
-from utils.console import NORMAL, UNDERLINE
+
 from utils.config_parser import parse_config_file
+from utils.console import NORMAL, UNDERLINE
 from utils.dataset import get_all_jail_names, get_jail_config_path, get_jail_rootfs_path, parse_os_release
 
 

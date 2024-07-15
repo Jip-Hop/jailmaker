@@ -6,9 +6,9 @@ import os
 import subprocess
 
 from utils.console import eprint
-from utils.editor import get_text_editor
 from utils.dataset import check_jail_name_valid, check_jail_name_available
 from utils.dataset import get_jail_config_path, jail_is_running
+from utils.editor import get_text_editor
 
 
 def edit_jail(jail_name):

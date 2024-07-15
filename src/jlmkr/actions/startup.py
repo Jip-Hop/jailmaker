@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 
 from actions.start import start_jail
-from utils.dataset import get_all_jail_names, get_jail_config_path
 from utils.config_parser import parse_config_file
+from utils.dataset import get_all_jail_names, get_jail_config_path
 
 
 def startup_jails():

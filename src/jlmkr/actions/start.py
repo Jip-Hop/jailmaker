@@ -9,13 +9,14 @@ import tempfile
 
 from pathlib import Path
 from textwrap import dedent
+
+from paths import SHORTNAME, JAIL_ROOTFS_NAME
 from utils.config_parser import parse_config_file
 from utils.console import eprint
+from utils.dataset import get_jail_config_path, get_jail_rootfs_path
+from utils.dataset import get_jail_path, jail_is_running
 from utils.files import stat_chmod
 from utils.gpu import passthrough_intel, passthrough_nvidia
-from utils.dataset import get_jail_path, jail_is_running
-from utils.dataset import get_jail_config_path, get_jail_rootfs_path
-from utils.paths import SHORTNAME, JAIL_ROOTFS_NAME
 
 
 def start_jail(jail_name):

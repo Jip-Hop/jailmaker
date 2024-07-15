@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-
 import subprocess
 import time
 
