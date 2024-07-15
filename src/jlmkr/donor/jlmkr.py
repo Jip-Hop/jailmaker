@@ -143,6 +143,7 @@ from actions.log import log_jail
 from actions.shell import shell_jail
 from actions.start import start_jail
 from actions.restart import restart_jail
+from actions.images import run_lxc_download_script
 
 
 def cleanup(jail_path):
