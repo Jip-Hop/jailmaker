@@ -707,12 +707,7 @@ def run_lxc_download_script(
     return 0
 
 
-def stat_chmod(file_path, mode):
-    """
-    Change mode if file doesn't already have this mode.
-    """
-    if mode != stat.S_IMODE(os.stat(file_path).st_mode):
-        os.chmod(file_path, mode)
+from utils.files import stat_chmod
 
 
 def get_mount_point(path):
