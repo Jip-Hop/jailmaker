@@ -6,7 +6,7 @@ import os.path
 import platform
 
 
-from donor.jlmkr import Chroot
+from utils.chroot import Chroot
 from utils.paths import JAILS_DIR_PATH, JAIL_CONFIG_NAME, JAIL_ROOTFS_NAME
 
 

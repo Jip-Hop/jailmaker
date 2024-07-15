@@ -137,25 +137,7 @@ class CustomSubParser(argparse.ArgumentParser):
             raise ExceptionWithParser(self, message)
 
 
-class Chroot:
-    def __init__(self, new_root):
-        self.new_root = new_root
-        self.old_root = None
-        self.initial_cwd = None
-
-    def __enter__(self):
-        self.old_root = os.open("/", os.O_PATH)
-        self.initial_cwd = os.path.abspath(os.getcwd())
-        os.chdir(self.new_root)
-        os.chroot(".")
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        os.chdir(self.old_root)
-        os.chroot(".")
-        os.close(self.old_root)
-        os.chdir(self.initial_cwd)
-
-
+from utils.chroot import Chroot
 from utils.console import eprint, fail
 from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
 
