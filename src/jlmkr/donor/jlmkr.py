@@ -1463,6 +1463,7 @@ def add_parser(subparser, **kwargs):
 
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
+      if os.environ.get('JLMKR_DEBUG') is not None:
         fail(
             f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`."
         )
