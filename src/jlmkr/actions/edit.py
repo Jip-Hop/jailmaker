@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-import os
 import subprocess
 
 from utils.console import eprint
