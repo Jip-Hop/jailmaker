@@ -12,3 +12,13 @@ def stat_chmod(file_path, mode):
     """
     if mode != stat.S_IMODE(os.stat(file_path).st_mode):
         os.chmod(file_path, mode)
+
+
+def get_mount_point(path):
+    """
+    Return the mount point on which the given path resides.
+    """
+    path = os.path.abspath(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+    return path
