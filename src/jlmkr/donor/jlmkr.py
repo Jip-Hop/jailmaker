@@ -163,13 +163,7 @@ def log_jail(jail_name, args):
     ).returncode
 
 
-def shell_jail(args):
-    """
-    Open a shell in the jail with given name.
-    """
-    return subprocess.run(["machinectl", "shell"] + args).returncode
-
-
+from actions.shell import shell_jail
 from actions.start import start_jail
 from actions.restart import restart_jail
 
