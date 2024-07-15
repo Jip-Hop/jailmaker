@@ -4,7 +4,7 @@
 
 import os
 
-from donor.jlmkr import JAILS_DIR_PATH
+from utils.paths import JAILS_DIR_PATH
 
 
 def get_all_jail_names():

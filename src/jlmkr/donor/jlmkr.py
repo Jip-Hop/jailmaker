@@ -114,18 +114,10 @@ systemd_nspawn_default_args=--bind-ro=/sys/module
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )
-ZIPAPP_PATH = os.path.realpath(__file__)
-while not os.path.exists(ZIPAPP_PATH):
-    ZIPAPP_PATH = os.path.dirname(ZIPAPP_PATH)
-SCRIPT_PATH = os.path.realpath(ZIPAPP_PATH)
-SCRIPT_NAME = os.path.basename(SCRIPT_PATH)
-SCRIPT_DIR_PATH = os.path.dirname(SCRIPT_PATH)
-COMMAND_NAME = os.path.basename(ZIPAPP_PATH)
-JAILS_DIR_PATH = os.path.join(SCRIPT_DIR_PATH, "jails")
-JAIL_CONFIG_NAME = "config"
-JAIL_ROOTFS_NAME = "rootfs"
-SHORTNAME = "jlmkr"
 
+from utils.paths import SCRIPT_PATH, SCRIPT_NAME, SCRIPT_DIR_PATH
+from utils.paths import JAILS_DIR_PATH, JAIL_CONFIG_NAME, JAIL_ROOTFS_NAME
+from utils.paths import COMMAND_NAME, SHORTNAME
 from utils.console import BOLD, RED, YELLOW, UNDERLINE, NORMAL
 
 DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
