@@ -6,6 +6,8 @@ import configparser
 import io
 import re
 
+from donor.jlmkr import DEFAULT_CONFIG
+
 
 # Used in parser getters to indicate the default behavior when a specific
 # option is not found. Created to enable `None` as a valid fallback value.
@@ -136,3 +138,17 @@ class ExceptionWithParser(Exception):
         self.parser = parser
         self.message = message
         super().__init__(message)
+
+
+def parse_config_file(jail_config_path):
+    config = KeyValueParser()
+    # Read default config to fallback to default values
+    # for keys not found in the jail_config_path file
+    config.read_default_string(DEFAULT_CONFIG)
+    try:
+        with open(jail_config_path, "r") as fp:
+            config.read_file(fp)
+        return config
+    except FileNotFoundError:
+        eprint(f"Unable to find config file: {jail_config_path}.")
+        return
