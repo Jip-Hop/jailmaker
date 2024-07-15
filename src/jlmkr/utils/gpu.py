@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 from utils.console import eprint
-from utils.jail_dataset import get_jail_rootfs_path
+from utils.dataset import get_jail_rootfs_path
 from utils.paths import SHORTNAME
 
 

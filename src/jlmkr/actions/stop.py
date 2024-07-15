@@ -6,7 +6,7 @@ import subprocess
 import time
 
 from utils.console import eprint
-from utils.jail_dataset import jail_is_running
+from utils.dataset import jail_is_running
 
 
 def stop_jail(jail_name):

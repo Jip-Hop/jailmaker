@@ -15,9 +15,9 @@ from utils.config_parser import KeyValueParser, DEFAULT_CONFIG
 from utils.console import YELLOW, BOLD, NORMAL, eprint
 from utils.download import run_lxc_download_script
 from utils.files import stat_chmod, get_mount_point
-from utils.jail_dataset import check_jail_name_valid, check_jail_name_available
-from utils.jail_dataset import get_jail_config_path, get_jail_rootfs_path
-from utils.jail_dataset import get_jail_path, get_zfs_dataset, create_zfs_dataset, cleanup
+from utils.dataset import check_jail_name_valid, check_jail_name_available
+from utils.dataset import get_jail_config_path, get_jail_rootfs_path
+from utils.dataset import get_jail_path, get_zfs_dataset, create_zfs_dataset, cleanup
 from utils.paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_NAME, SCRIPT_DIR_PATH
 
 

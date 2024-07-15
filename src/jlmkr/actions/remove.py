@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 
 from actions.stop import stop_jail
-from utils.jail_dataset import check_jail_name_valid, check_jail_name_available
-from utils.jail_dataset import get_jail_path, cleanup
+from utils.dataset import check_jail_name_valid, check_jail_name_available
+from utils.dataset import get_jail_path, cleanup
 from utils.console import eprint
 
 

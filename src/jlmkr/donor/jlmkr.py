@@ -69,8 +69,8 @@ class CustomSubParser(argparse.ArgumentParser):
 
 from utils.chroot import Chroot
 from utils.console import eprint, fail
-from utils.jail_dataset import check_jail_name_valid, check_jail_name_available
-from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
+from utils.dataset import check_jail_name_valid, check_jail_name_available
+from utils.dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
 
 from actions.exec import exec_jail
 from actions.status import status_jail
@@ -80,20 +80,20 @@ from actions.start import start_jail
 from actions.restart import restart_jail
 from actions.images import run_lxc_download_script
 
-from utils.jail_dataset import cleanup, check_jail_name_valid, check_jail_name_available
+from utils.dataset import cleanup, check_jail_name_valid, check_jail_name_available
 from utils.download import run_lxc_download_script
 from utils.files import stat_chmod
-from utils.jail_dataset import get_zfs_dataset, create_zfs_dataset, remove_zfs_dataset
+from utils.dataset import get_zfs_dataset, create_zfs_dataset, remove_zfs_dataset
 
 from actions.create import create_jail
 from utils.editor import get_text_editor
-from utils.jail_dataset import jail_is_running
+from utils.dataset import jail_is_running
 
 from actions.edit import edit_jail
 from actions.stop import stop_jail
 from actions.remove import remove_jail
 
-from utils.jail_dataset import get_all_jail_names, parse_os_release
+from utils.dataset import get_all_jail_names, parse_os_release
 from actions.list import list_jails
 
 
