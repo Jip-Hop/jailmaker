@@ -2,6 +2,12 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
+from __main__ import __disclaimer__
+from utils.console import YELLOW, BOLD, NORMAL
+
+
+DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
+
 
 DEFAULT_CONFIG = """startup=0
 gpu_passthrough_intel=0

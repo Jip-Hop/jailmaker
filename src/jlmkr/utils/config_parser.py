@@ -6,7 +6,7 @@ import configparser
 import io
 import re
 
-from donor.data import DEFAULT_CONFIG
+from data import DEFAULT_CONFIG
 
 
 # Used in parser getters to indicate the default behavior when a specific

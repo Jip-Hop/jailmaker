@@ -1,137 +1,30 @@
-#!/usr/bin/env python3
-
-"""Create persistent Linux 'jails' on TrueNAS SCALE, \
-with full access to all files via bind mounts, \
-thanks to systemd-nspawn!"""
-
-__version__ = "3.0.0"
-__author__ = "Jip-Hop"
-__copyright__ = "Copyright (C) 2023, Jip-Hop"
-__license__ = "LGPL-3.0-only"
-__disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
-IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
+# SPDX-FileCopyrightText: © 2024 Jip-Hop and the Jailmakers <https://github.com/Jip-Hop/jailmaker>
+#
+# SPDX-License-Identifier: LGPL-3.0-only
 
 import argparse
-import contextlib
-import hashlib
-import json
 import os
-import platform
-import re
-import shlex
-import shutil
-import stat
-import subprocess
 import sys
-import tempfile
-import time
-import urllib.request
-from pathlib import Path, PurePath
-from textwrap import dedent
 
-
-# Use mostly default settings for systemd-nspawn but with systemd-run instead of a service file:
-# https://github.com/systemd/systemd/blob/main/units/systemd-nspawn%40.service.in
-# Use TasksMax=infinity since this is what docker does:
-# https://github.com/docker/engine/blob/master/contrib/init/systemd/docker.service
-
-# Use SYSTEMD_NSPAWN_LOCK=0: otherwise jail won't start jail after a shutdown (but why?)
-# Would give "directory tree currently busy" error and I'd have to run
-# `rm /run/systemd/nspawn/locks/*` and remove the .lck file from jail_path
-# Disabling locking isn't a big deal as systemd-nspawn will prevent starting a container
-# with the same name anyway: as long as we're starting jails using this script,
-# it won't be possible to start the same jail twice
-
-# Always add --bind-ro=/sys/module to make lsmod happy
-# https://manpages.debian.org/bookworm/manpages/sysfs.5.en.html
-
-from utils.paths import SCRIPT_PATH, SCRIPT_NAME, SCRIPT_DIR_PATH
-from utils.paths import JAILS_DIR_PATH, JAIL_CONFIG_NAME, JAIL_ROOTFS_NAME
-from utils.paths import COMMAND_NAME, SHORTNAME
-from utils.console import BOLD, RED, YELLOW, UNDERLINE, NORMAL
-
-DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
-
-from utils.config_parser import ExceptionWithParser, KeyValueParser
-from utils.config_parser import parse_config_file
-
-
-# Workaround for exit_on_error=False not applying to:
-# "error: the following arguments are required"
-# https://github.com/python/cpython/issues/103498
-class CustomSubParser(argparse.ArgumentParser):
-    def error(self, message):
-        if self.exit_on_error:
-            super().error(message)
-        else:
-            raise ExceptionWithParser(self, message)
-
-
-from utils.chroot import Chroot
-from utils.console import eprint, fail
-from utils.dataset import check_jail_name_valid, check_jail_name_available
-from utils.dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
-
-from actions.exec import exec_jail
-from actions.status import status_jail
-from actions.log import log_jail
-from actions.shell import shell_jail
-from actions.start import start_jail
-from actions.restart import restart_jail
-from actions.images import run_lxc_download_script
-
-from utils.dataset import cleanup, check_jail_name_valid, check_jail_name_available
-from utils.download import run_lxc_download_script
+from __main__ import __version__, __disclaimer__
+from data import DISCLAIMER
+from paths import SCRIPT_PATH, COMMAND_NAME, SCRIPT_NAME
+from utils.editor import get_text_editor
 from utils.files import stat_chmod
-from utils.dataset import get_zfs_dataset, create_zfs_dataset, remove_zfs_dataset
 
 from actions.create import create_jail
-from utils.editor import get_text_editor
-from utils.dataset import jail_is_running
-
 from actions.edit import edit_jail
-from actions.stop import stop_jail
-from actions.remove import remove_jail
-
-from utils.dataset import get_all_jail_names, parse_os_release
+from actions.exec import exec_jail
+from actions.images import run_lxc_download_script
 from actions.list import list_jails
+from actions.log import log_jail
+from actions.remove import remove_jail
+from actions.restart import restart_jail
+from actions.shell import shell_jail
+from actions.start import start_jail
 from actions.startup import startup_jails
-
-
-def split_at_string(lst, string):
-    try:
-        index = lst.index(string)
-        return lst[:index], lst[index + 1 :]
-    except ValueError:
-        return lst, []
-
-
-def add_parser(subparser, **kwargs):
-    if kwargs.get("add_help") is False:
-        # Don't add help if explicitly disabled
-        add_help = False
-    else:
-        # Never add help with the built in add_help
-        kwargs["add_help"] = False
-        add_help = True
-
-    kwargs["epilog"] = DISCLAIMER
-    kwargs["formatter_class"] = argparse.RawDescriptionHelpFormatter
-    kwargs["exit_on_error"] = False
-    func = kwargs.pop("func")
-    parser = subparser.add_parser(**kwargs)
-    parser.set_defaults(func=func)
-
-    if add_help:
-        parser.add_argument(
-            "-h", "--help", help="show this help message and exit", action="store_true"
-        )
-
-    # Setting the add_help after the parser has been created with add_parser has no effect,
-    # but it allows us to look up if this parser has a help message available
-    parser.add_help = add_help
-
-    return parser
+from actions.status import status_jail
+from actions.stop import stop_jail
 
 
 def main():
@@ -391,8 +284,48 @@ def main():
     sys.exit(func(**args))
 
 
-if __name__ == "__main__":
+# Workaround for exit_on_error=False not applying to:
+# "error: the following arguments are required"
+# https://github.com/python/cpython/issues/103498
+class CustomSubParser(argparse.ArgumentParser):
+    def error(self, message):
+        if self.exit_on_error:
+            super().error(message)
+        else:
+            raise ExceptionWithParser(self, message)
+
+
+def add_parser(subparser, **kwargs):
+    if kwargs.get("add_help") is False:
+        # Don't add help if explicitly disabled
+        add_help = False
+    else:
+        # Never add help with the built in add_help
+        kwargs["add_help"] = False
+        add_help = True
+
+    kwargs["epilog"] = DISCLAIMER
+    kwargs["formatter_class"] = argparse.RawDescriptionHelpFormatter
+    kwargs["exit_on_error"] = False
+    func = kwargs.pop("func")
+    parser = subparser.add_parser(**kwargs)
+    parser.set_defaults(func=func)
+
+    if add_help:
+        parser.add_argument(
+            "-h", "--help", help="show this help message and exit", action="store_true"
+        )
+
+    # Setting the add_help after the parser has been created with add_parser has no effect,
+    # but it allows us to look up if this parser has a help message available
+    parser.add_help = add_help
+
+    return parser
+
+
+def split_at_string(lst, string):
     try:
-        main()
-    except KeyboardInterrupt:
-        sys.exit(130)
+        index = lst.index(string)
+        return lst[:index], lst[index + 1 :]
+    except ValueError:
+        return lst, []

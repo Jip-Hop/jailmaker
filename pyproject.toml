@@ -27,16 +27,16 @@ GitHub = "https://github.com/Jip-Hop/jailmaker"
 [build-system]
 requires = [
 	"hatchling",
-# 	"hatch-zipapp @ file:src/builder/app",
-# 	"hatch-appzip @ file:src/builder/zip",
+	"hatch-zipapp @ file:src/builder/app",
+	"hatch-appzip @ file:src/builder/zip",
 ]
 build-backend = "hatchling.build"
 
 [project.scripts]
-jlmkr = "jlmkr.donor:main"
+jlmkr = "jlmkr:__main__"
 
 [tool.hatch.version]
-path = "src/jlmkr/__about__.py" # or source = "vcs"
+path = "src/jlmkr/__main__.py" # or source = "vcs"
 
 [tool.hatch.build.zipapp]
 dependencies = ["hatch-zipapp-builder @ file:src/builder/app"]
