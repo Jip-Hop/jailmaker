@@ -139,7 +139,8 @@ else:
 
 DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
 
-from utils.config_parser import KeyValueParser, ExceptionWithParser
+from utils.config_parser import ExceptionWithParser, KeyValueParser
+from utils.config_parser import parse_config_file
 
 
 # Workaround for exit_on_error=False not applying to:
@@ -379,20 +380,6 @@ def shell_jail(args):
     Open a shell in the jail with given name.
     """
     return subprocess.run(["machinectl", "shell"] + args).returncode
-
-
-def parse_config_file(jail_config_path):
-    config = KeyValueParser()
-    # Read default config to fallback to default values
-    # for keys not found in the jail_config_path file
-    config.read_default_string(DEFAULT_CONFIG)
-    try:
-        with open(jail_config_path, "r") as fp:
-            config.read_file(fp)
-        return config
-    except FileNotFoundError:
-        eprint(f"Unable to find config file: {jail_config_path}.")
-        return
 
 
 def systemd_escape_path(path):
@@ -1383,6 +1370,7 @@ def list_jails():
     )
 
     return 0
+from utils.parent_dataset import get_all_jail_names
 from utils.jail_dataset import parse_os_release
 
 
