@@ -2,9 +2,6 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-import subprocess
-import time
-
 from actions.start import start_jail
 from actions.stop import stop_jail
 from utils.console import eprint
