@@ -7,6 +7,7 @@ import io
 import re
 
 from data import DEFAULT_CONFIG
+from utils.console import eprint
 
 
 # Used in parser getters to indicate the default behavior when a specific
