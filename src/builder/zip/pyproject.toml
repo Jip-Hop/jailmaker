@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: © 2024 Jip-Hop and the Jailmakers <https://github.com/Jip-Hop/jailmaker>
+#
+# SPDX-License-Identifier: LGPL-3.0-only
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+name = "hatch-appzip"
+version = "0.0.dev0"
+classifiers = [
+	"License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+	"Private :: Do Not Upload",
+]
+dependencies = ["hatchling"]
+
+[project.entry-points.hatch]
+appzip = "hooks_zip"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]

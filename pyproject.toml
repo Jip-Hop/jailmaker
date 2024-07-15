@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: © 2024 Jip-Hop and the Jailmakers <https://github.com/Jip-Hop/jailmaker>
+#
+# SPDX-License-Identifier: LGPL-3.0-only
+
+[project]
+name = "jlmkr"
+description = "Build and manage jails on TrueNAS SCALE"
+dynamic = ["version"]
+readme = "README.md"
+classifiers = [
+	"License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+	"Private :: Do Not Upload",
+]
+authors = [
+	{name = "Jip-Hop"},
+	{name = "Lockszmith-GH"},
+	{name = "jonct"},
+]
+maintainers = [
+	{name = "Jip-Hop"},
+]
+requires-python = ">=3.8"
+
+[project.urls]
+GitHub = "https://github.com/Jip-Hop/jailmaker"
+
+[build-system]
+requires = [
+	"hatchling",
+# 	"hatch-zipapp @ file:src/builder/app",
+# 	"hatch-appzip @ file:src/builder/zip",
+]
+build-backend = "hatchling.build"
+
+[project.scripts]
+jlmkr = "jlmkr.donor:main"
+
+[tool.hatch.version]
+path = "src/jlmkr/__about__.py" # or source = "vcs"
+
+[tool.hatch.build.zipapp]
+dependencies = ["hatch-zipapp-builder @ file:src/builder/app"]
+
+[tool.hatch.build.appzip]
+dependencies = ["hatch-appzip-builder @ file:src/builder/zip"]
+
+[tool.hatch.build.targets.custom]
+path = "src/builder/builder.py"
+
+[tool.hatch.env]
+requires = [
+	"hatch-zipapp @ file:src/builder/app",
+	"hatch-appzip @ file:src/builder/zip",
+]
+
+[[tool.hatch.envs.test.matrix]]
+python = [
+	"3.11",	# TrueNAS SCALE 24.04 Dragonfish
+]
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/jlmkr tests}"
+
+[tool.coverage.run]
+source_pkgs = ["jlmkr", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/jlmkr/__about__.py",
+]
+
+[tool.coverage.paths]
+jlmkr = ["src/jlmkr"]
+tests = ["src/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]

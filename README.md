@@ -228,6 +228,7 @@ After cloning the project, navigate into its working directory and create a self
 > .venv/bin/virtualenv --no-setuptools .venv
 > rm -rf microvenv pip.pyz
 > ```
+*Note: This process and the resulting build environment will cache some items under `~/.local/share` in addition to the project directory.*
 
 Activate the venv into your *current* shell session.
 
@@ -239,7 +240,25 @@ Develop away. Note that when you're done, you can undo this activation and retur
 
 For more information on Python standard venvs, go to [the source](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-and-using-virtual-environments).
 
-*TODO: introduce the tools we use for building, testing, and stylechecking.*
+### Hatching a build
+
+While in an *active* session, install the [Hatch](https://hatch.pypa.io) project manager. This will load quite a flurry of dependencies, but will only do so into the new `.venv` directory.
+
+    pip install hatch
+
+Build the "zipapp" target. This will create a `dist/jlmkr` tool which is the direct descendant of Jip-Hop's original `jlmkr.py` script.
+
+    hatch build -t zipapp
+
+Now build the "appzip" target. This bundles the tool, `README.md` and `LICENSING` into a downloadable zip archive.
+
+    hatch build -t appzip
+
+If you make any changes *to the embedded builder plugins* that perform the above, then you will need to clear caches between builds. Otherwise and generally, you will not need to do so.
+
+    hatch env prune
+
+Hatch has oodles more features yet to be explored, such as: automated testing, code coverage, and style checking. For now, we've gotten it building.
 
 ## Filing Issues and Community Support
 
