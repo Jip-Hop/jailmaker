@@ -139,7 +139,7 @@ else:
 
 DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
 
-from utils.KeyValueParser import KeyValueParser, ExceptionWithParser
+from utils.config_parser import KeyValueParser, ExceptionWithParser
 
 
 # Workaround for exit_on_error=False not applying to:
