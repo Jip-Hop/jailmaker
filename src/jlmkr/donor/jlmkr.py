@@ -143,17 +143,7 @@ from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_roo
 
 from actions.exec import exec_jail
 from actions.status import status_jail
-
-
-def log_jail(jail_name, args):
-    """
-    Show the log file of the jail with given name.
-    """
-    return subprocess.run(
-        ["journalctl", "-u", f"{SHORTNAME}-{jail_name}", *args]
-    ).returncode
-
-
+from actions.log import log_jail
 from actions.shell import shell_jail
 from actions.start import start_jail
 from actions.restart import restart_jail
