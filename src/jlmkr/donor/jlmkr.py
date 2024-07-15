@@ -187,16 +187,7 @@ def fail(*args, **kwargs):
     sys.exit(1)
 
 
-def get_jail_path(jail_name):
-    return os.path.join(JAILS_DIR_PATH, jail_name)
-
-
-def get_jail_config_path(jail_name):
-    return os.path.join(get_jail_path(jail_name), JAIL_CONFIG_NAME)
-
-
-def get_jail_rootfs_path(jail_name):
-    return os.path.join(get_jail_path(jail_name), JAIL_ROOTFS_NAME)
+from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
 
 
 # Test intel GPU by decoding mp4 file (output is discarded)
@@ -1318,23 +1309,6 @@ def get_all_jail_names():
     return jail_names
 
 
-def parse_os_release(new_root):
-    result = {}
-    with Chroot(new_root):
-        # Use chroot to correctly resolve os-release symlink (for nixos)
-        for candidate in ["/etc/os-release", "/usr/lib/os-release"]:
-            try:
-                with open(candidate, encoding="utf-8") as f:
-                    # TODO: can I create a solution which not depends on the internal _parse_os_release method?
-                    result = platform._parse_os_release(f)
-                    break
-            except OSError:
-                # Silently ignore failing to read os release info
-                pass
-
-    return result
-
-
 def list_jails():
     """
     List all available and running jails.
@@ -1409,6 +1383,7 @@ def list_jails():
     )
 
     return 0
+from utils.jail_dataset import parse_os_release
 
 
 def startup_jails():
