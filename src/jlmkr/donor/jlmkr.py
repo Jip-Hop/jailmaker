@@ -187,20 +187,8 @@ def shell_jail(args):
     return subprocess.run(["machinectl", "shell"] + args).returncode
 
 
-from actions.start import add_hook, start_jail
-
-
-def restart_jail(jail_name):
-    """
-    Restart jail with given name.
-    """
-
-    returncode = stop_jail(jail_name)
-    if returncode != 0:
-        eprint("Abort restart.")
-        return returncode
-
-    return start_jail(jail_name)
+from actions.start import start_jail
+from actions.restart import restart_jail
 
 
 def cleanup(jail_path):
