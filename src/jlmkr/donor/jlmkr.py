@@ -85,22 +85,8 @@ from utils.download import run_lxc_download_script
 from utils.files import stat_chmod
 from utils.jail_dataset import get_zfs_dataset, create_zfs_dataset, remove_zfs_dataset
 
-
-def get_text_editor():
-    def get_from_environ(key):
-        if editor := os.environ.get(key):
-            return shutil.which(editor)
-
-    return (
-        get_from_environ("VISUAL")
-        or get_from_environ("EDITOR")
-        or shutil.which("editor")
-        or shutil.which("/usr/bin/editor")
-        or "nano"
-    )
-
-
 from actions.create import create_jail
+from utils.editor import get_text_editor
 from utils.jail_dataset import jail_is_running
 
 
