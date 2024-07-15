@@ -18,7 +18,7 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
 - Will create a ZFS Dataset for each jail if the `jailmaker` directory is a dataset (easy snapshotting)
 - Optional: configuring the jail so you can run Docker inside it
-- Optional: GPU passthrough (including nvidia GPU with the drivers bind mounted from the host)
+- Optional: GPU passthrough (intel, nvidia with drivers bind mounted from the host, [AMD reportedly works too](https://github.com/Jip-Hop/jailmaker/issues/109#issuecomment-2216306765))
 - Starting the jail with your config applied
 
 ## Installation
