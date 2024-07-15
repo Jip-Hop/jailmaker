@@ -2,14 +2,13 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-import contextlib
-import os
-import re
+import sys
 
 from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
 
+from actions.start import start_jail
 from cli import DISCLAIMER
 from paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_NAME, SCRIPT_DIR_PATH
 from utils.chroot import Chroot
@@ -19,7 +18,8 @@ from utils.download import run_lxc_download_script
 from utils.files import stat_chmod, get_mount_point
 from utils.dataset import check_jail_name_valid, check_jail_name_available
 from utils.dataset import get_jail_config_path, get_jail_rootfs_path
-from utils.dataset import get_jail_path, get_zfs_dataset, create_zfs_dataset, cleanup
+from utils.dataset import get_jail_path, get_zfs_dataset, create_zfs_dataset
+from utils.dataset import parse_os_release, cleanup
 
 
 def create_jail(**kwargs):
