@@ -7,7 +7,6 @@
 import os
 from hatchling.builders.config import BuilderConfig
 from hatchling.builders.plugin.interface import BuilderInterface
-from hatchling.builders.plugin.interface import IncludedFile
 from hatchling.builders.utils import normalize_relative_path
 from pathlib import Path
 from typing import Any, Callable, Iterable
