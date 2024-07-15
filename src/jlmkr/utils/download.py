@@ -4,8 +4,11 @@
 
 import hashlib
 import os
+import re
 import subprocess
+import urllib
 
+from utils.console import eprint
 from utils.files import stat_chmod
 
 
