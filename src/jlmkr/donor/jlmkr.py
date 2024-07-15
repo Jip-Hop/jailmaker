@@ -141,24 +141,7 @@ from utils.chroot import Chroot
 from utils.console import eprint, fail
 from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
 
-
-def exec_jail(jail_name, cmd):
-    """
-    Execute a command in the jail with given name.
-    """
-    return subprocess.run(
-        [
-            "systemd-run",
-            "--machine",
-            jail_name,
-            "--quiet",
-            "--pipe",
-            "--wait",
-            "--collect",
-            "--service-type=exec",
-            *cmd,
-        ]
-    ).returncode
+from actions.exec import exec_jail
 
 
 def status_jail(jail_name, args):
