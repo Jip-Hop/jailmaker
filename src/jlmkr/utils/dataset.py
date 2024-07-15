@@ -13,7 +13,7 @@ from textwrap import dedent
 
 from paths import JAILS_DIR_PATH, JAIL_CONFIG_NAME, JAIL_ROOTFS_NAME, SCRIPT_DIR_PATH
 from utils.chroot import Chroot
-from utils.console import eprint, YELLOW, BOLD, NORMAL
+from utils.console import eprint, fail, YELLOW, BOLD, NORMAL
 
 
 def get_jail_path(jail_name):
