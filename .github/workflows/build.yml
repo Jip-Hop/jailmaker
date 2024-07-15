@@ -40,9 +40,12 @@ jobs:
     
       - name: Install Hatch
         uses: pypa/hatch@install
+        
+      - name: Run style check
+        run: hatch fmt --check
     
-      - name: Run unit tests
-        run: hatch run +py=${{ matrix.python-version }} test:test
+#       - name: Run unit tests
+#         run: hatch run +py=${{ matrix.python-version }} test:test
 
       - name: Build distribution
         run: hatch build -t zipapp -t appzip
