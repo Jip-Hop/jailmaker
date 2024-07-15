@@ -142,16 +142,7 @@ from utils.console import eprint, fail
 from utils.jail_dataset import get_jail_path, get_jail_config_path, get_jail_rootfs_path
 
 from actions.exec import exec_jail
-
-
-def status_jail(jail_name, args):
-    """
-    Show the status of the systemd service wrapping the jail with given name.
-    """
-    # Alternatively `machinectl status jail_name` could be used
-    return subprocess.run(
-        ["systemctl", "status", f"{SHORTNAME}-{jail_name}", *args]
-    ).returncode
+from actions.status import status_jail
 
 
 def log_jail(jail_name, args):
