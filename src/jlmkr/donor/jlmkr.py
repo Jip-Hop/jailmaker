@@ -95,20 +95,7 @@ from actions.remove import remove_jail
 
 from utils.dataset import get_all_jail_names, parse_os_release
 from actions.list import list_jails
-
-
-def startup_jails():
-    start_failure = False
-    for jail_name in get_all_jail_names():
-        config = parse_config_file(get_jail_config_path(jail_name))
-        if config and config.my_getboolean("startup"):
-            if start_jail(jail_name) != 0:
-                start_failure = True
-
-    if start_failure:
-        return 1
-
-    return 0
+from actions.startup import startup_jails
 
 
 def split_at_string(lst, string):
