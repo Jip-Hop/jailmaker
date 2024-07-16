@@ -6,7 +6,7 @@ import hashlib
 import os
 import re
 import subprocess
-import urllib
+import urllib.request
 
 from utils.console import eprint
 from utils.files import stat_chmod
