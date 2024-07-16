@@ -19,7 +19,9 @@ jobs:
   test:
     # The type of runner that the job will run on
     runs-on: ubuntu-24.04
-
+    defaults:
+      run:
+        shell: bash
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -35,7 +37,6 @@ jobs:
       - name: Install packages and setup networking
         run: |
           sudo -s <<END
-          set -euo pipefail
 
           systemctl disable systemd-resolved --now
           rm /etc/resolv.conf
@@ -99,7 +100,6 @@ jobs:
         env:
           PYTHONUNBUFFERED: 1
         run: |
-          set -euo pipefail
           sudo chown 0:0 jlmkr ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
           sudo ./test/test.sh
