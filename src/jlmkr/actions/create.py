@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
+import contextlib
+import os
 import sys
 
 from inspect import cleandoc
