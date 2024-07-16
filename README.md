@@ -12,7 +12,7 @@ Persistent Linux 'jails' on TrueNAS SCALE to install software (k3s, docker, port
 
 ## Summary
 
-TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This script helps with the following:
+TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This app helps with the following:
 
 - Setting up the jail so it won't be lost when you update SCALE
 - Choosing a distro (Debian 12 strongly recommended, but Ubuntu, Arch Linux or Rocky Linux seem good choices too)
@@ -23,27 +23,36 @@ TrueNAS SCALE can create persistent Linux 'jails' with systemd-nspawn. This scri
 
 ## Installation
 
-Beginning with 24.04 (Dragonfish), TrueNAS SCALE officially includes the systemd-nspawn containerization program in the base system. Technically there's nothing to install. You only need the `jlmkr.py` script file in the right place. [Instructions with screenshots](https://www.truenas.com/docs/scale/scaletutorials/apps/sandboxes/) are provided on the TrueNAS website. Start by creating a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr.py`.
+Beginning with 24.04 (Dragonfish), TrueNAS SCALE officially includes the systemd-nspawn containerization program in the base system. Technically there's nothing to install. You only need the `jlmkr` app in the right place. [Instructions with screenshots](https://www.truenas.com/docs/scale/scaletutorials/apps/sandboxes/) are provided on the TrueNAS website. Start by creating a new dataset called `jailmaker` with the default settings (from TrueNAS web interface). Then login as the root user and download `jlmkr`.
+
+TODO: update install instructions. For now one may clone or download the repo and run the below commands to create the `jlmkr` zipapp.
 
 ```shell
-cd /mnt/mypool/jailmaker
-curl --location --remote-name https://raw.githubusercontent.com/Jip-Hop/jailmaker/main/jlmkr.py
-chmod +x jlmkr.py
+rm -rf /tmp/jlmkr-build
+mkdir -p /tmp/jlmkr-build
+cd /tmp/jlmkr-build
+curl -L https://github.com/Jip-Hop/jailmaker/archive/refs/heads/v3.0.0.tar.gz | tar xvz --strip-components=1
+python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
+cp jlmkr /mnt/mypool/jailmaker/
 ```
 
-The `jlmkr.py` script (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. If the automatically created `jails` directory is also a ZFS dataset (which is true for new users), then the `jlmkr.py` script will automatically create a new dataset for every jail created. This allows you to snapshot individual jails. For legacy users (where the `jails` directory is not a dataset) each jail will be stored in a plain directory.
+Alternatively one may download and extract `jlmkr` from the build artifacts of the [GitHub Actions](https://github.com/Jip-Hop/jailmaker/actions).
+
+The `jlmkr` app (and the jails + config it creates) are now stored on the `jailmaker` dataset and will survive updates of TrueNAS SCALE. If the automatically created `jails` directory is also a ZFS dataset (which is true for new users), then the `jlmkr` app will automatically create a new dataset for every jail created. This allows you to snapshot individual jails. For legacy users (where the `jails` directory is not a dataset) each jail will be stored in a plain directory.
 
 ### Alias
 
-Optionally you may create a shell alias for the currently logged in (admin) user to conveniently run `jlmkr.py` without having to change into the `jailmaker` directory or specify the full absolute path. I suggest to create the `jlmkr` alias like this:
+TODO: explain how to run `jlmkr` without using the absolute path. This probably involves building and releasing the `zipapp` on GitHub, downloading it into a directory added to the `PATH`. But this also requires the `jailmaker` directory to be configurable (instead of using the directory the `jlmkr` app itself is in) by using the `JAILMAKER_DIR` env variable.
 
-```shell
-echo "alias jlmkr=\"sudo -E '/mnt/mypool/jailmaker/jlmkr.py'\"" >> ~/.bashrc
+```bash
+mkdir /root/bin
+cd /root/bin
+curl -o jlmkr --location --remote-name https://some_url
+chmod +x jlmkr
+cd ../
+echo 'export PATH="/root/bin:$PATH"' | tee -a .bashrc .zshrc
+echo 'export JAILMAKER_DIR=/mnt/tank/path/to/desired/jailmaker/dir' | tee -a .bashrc .zshrc
 ```
-
-Please replace `/mnt/mypool/jailmaker/` with the actual path to where you stored `jlmkr.py`. If you're using zsh instead of bash, then you should replace `.bashrc` in the command above with `.zshrc`. If you've created the alias, you may use it instead of `./jlmkr.py`.
-
-The alias will be available the next time you load the shell, but to use the alias immediately you can `source ~/.bashrc` or `source ~/.zshrc`, as appropriate.
 
 ## Usage
 
@@ -52,25 +61,25 @@ The alias will be available the next time you load the shell, but to use the ali
 Creating a jail with the default settings is as simple as:
 
 ```shell
-./jlmkr.py create --start myjail
+./jlmkr create --start myjail
 ```
 
 You may also specify a path to a config template, for a quick and consistent jail creation process.
 
 ```shell
-./jlmkr.py create --start --config /path/to/config/template myjail
+./jlmkr create --start --config /path/to/config/template myjail
 ```
 
-Or you can override the default config by using flags. See `./jlmkr.py create --help` for the available options. Anything passed after the jail name will be passed to `systemd-nspawn` when starting the jail. See the `systemd-nspawn` manual for available options, specifically [Mount Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Mount_Options) and [Networking Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Networking_Options) are frequently used.
+Or you can override the default config by using flags. See `./jlmkr create --help` for the available options. Anything passed after the jail name will be passed to `systemd-nspawn` when starting the jail. See the `systemd-nspawn` manual for available options, specifically [Mount Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Mount_Options) and [Networking Options](https://manpages.debian.org/bookworm/systemd-container/systemd-nspawn.1.en.html#Networking_Options) are frequently used.
 
 ```shell
-./jlmkr.py create --start --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
+./jlmkr create --start --distro=ubuntu --release=jammy myjail --bind-ro=/mnt
 ```
 
 If you omit the jail name, the create process is interactive. You'll be presented with questions which guide you through the process.
 
 ```shell
-./jlmkr.py create
+./jlmkr create
 ```
 
 After answering some questions you should have created your first jail (and it should be running if you chose to start it after creating)!
@@ -78,16 +87,16 @@ After answering some questions you should have created your first jail (and it s
 ### Startup Jails on Boot
 
 ```shell
-# Call startup using the absolute path to jlmkr.py
-/mnt/mypool/jailmaker/jlmkr.py startup
+# Call startup using the absolute path to jlmkr
+/mnt/mypool/jailmaker/jlmkr startup
 ```
 
-In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr.py startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This will start all the jails with `startup=1` in the config file.
+In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jailmaker/jlmkr startup` as Post Init Script with Type `Command` from the TrueNAS web interface. This will start all the jails with `startup=1` in the config file.
 
 ### Start Jail
 
 ```shell
-./jlmkr.py start myjail
+./jlmkr start myjail
 ```
 
 ### List Jails
@@ -95,7 +104,7 @@ In order to start jails automatically after TrueNAS boots, run `/mnt/mypool/jail
 See list of jails (including running, startup state, GPU passthrough, distro, and IP).
 
 ```shell
-./jlmkr.py list
+./jlmkr list
 ```
 
 ### Execute Command in Jail
@@ -103,41 +112,41 @@ See list of jails (including running, startup state, GPU passthrough, distro, an
 You may want to execute a command inside a jail, for example manually from the TrueNAS shell, a shell script or a CRON job. The example below executes the `env` command inside the jail.
 
 ```shell
-./jlmkr.py exec myjail env
+./jlmkr exec myjail env
 ```
 
 This example executes bash inside the jail with a command as additional argument.
 
 ```shell
-./jlmkr.py exec myjail bash -c 'echo test; echo $RANDOM;'
+./jlmkr exec myjail bash -c 'echo test; echo $RANDOM;'
 ```
 
 ### Edit Jail Config
 
 ```shell
-./jlmkr.py edit myjail
+./jlmkr edit myjail
 ```
 
-Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr.py`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file using the `./jlmkr.py edit myjail` command. This opens the config file in your favorite editor, as determined by following [Debian's guidelines](https://www.debian.org/doc/debian-policy/ch-customized-programs.html#editors-and-pagers) on the matter. You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
+Once you've created a jail, it will exist in a directory inside the `jails` dir next to `jlmkr`. For example `/mnt/mypool/jailmaker/jails/myjail` if you've named your jail `myjail`. You may edit the jail configuration file using the `./jlmkr edit myjail` command. This opens the config file in your favorite editor, as determined by following [Debian's guidelines](https://www.debian.org/doc/debian-policy/ch-customized-programs.html#editors-and-pagers) on the matter. You'll have to stop the jail and start it again with `jlmkr` for these changes to take effect.
 
 ### Remove Jail
 
 Delete a jail and remove it's files (requires confirmation).
 
 ```shell
-./jlmkr.py remove myjail
+./jlmkr remove myjail
 ```
 
 ### Stop Jail
 
 ```shell
-./jlmkr.py stop myjail
+./jlmkr stop myjail
 ```
 
 ### Restart Jail
 
 ```shell
-./jlmkr.py restart myjail
+./jlmkr restart myjail
 ```
 
 ### Jail Shell
@@ -145,13 +154,13 @@ Delete a jail and remove it's files (requires confirmation).
 Switch into the jail's shell.
 
 ```shell
-./jlmkr.py shell myjail
+./jlmkr shell myjail
 ```
 
 ### Jail Status
 
 ```shell
-./jlmkr.py status myjail
+./jlmkr status myjail
 ```
 
 ### Jail Logs
@@ -159,12 +168,12 @@ Switch into the jail's shell.
 View a jail's logs.
 
 ```shell
-./jlmkr.py log myjail
+./jlmkr log myjail
 ```
 
 ### Additional Commands
 
-Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` script uses these commands under the hood and implements a subset of their functions. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
+Expert users may use the following additional commands to manage jails directly: `machinectl`, `systemd-nspawn`, `systemd-run`, `systemctl` and `journalctl`. The `jlmkr` app uses these commands under the hood and implements a subset of their functions. If you use them directly you will bypass any safety checks or configuration done by `jlmkr` and not everything will work in the context of TrueNAS SCALE.
 
 ## Security
 
@@ -210,7 +219,7 @@ TODO: write comparison between systemd-nspawn (without `jailmaker`), LXC, VMs, D
 
 ## Incompatible Distros
 
-The rootfs image `jlmkr.py` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
+The rootfs image `jlmkr` downloads comes from the [Linux Containers Image server](https://images.linuxcontainers.org). These images are made for LXC. We can use them with systemd-nspawn too, although not all of them work properly. For example, the `alpine` image doesn't work well. If you stick with common systemd based distros (Debian, Ubuntu, Arch Linux...) you should be fine.
 
 ## Filing Issues and Community Support
 

@@ -1,3 +1,24 @@
+# SPDX-FileCopyrightText: © 2024 Jip-Hop and the Jailmakers <https://github.com/Jip-Hop/jailmaker>
+#
+# SPDX-License-Identifier: LGPL-3.0-only
+
+dist/
+
+# jail-specific
 /.lxc/
 /jails/
+jlmkr
+
+# Mac-specific
 .DS_Store
+._.DS_Store
+
+# <https://github.com/github/gitignore/blob/main/Python.gitignore>
+
+/.venv/
+
+__pycache__/
+*.py[cod]
+
+.pytest_cache/
+.ruff_cache/

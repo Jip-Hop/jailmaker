@@ -13,9 +13,9 @@ if [[ -z "$JLMKR_PATH" && -n "$SCALE_POOL_ROOT" ]]; then
 elif [[ -z "$JLMKR_PATH" ]]; then
     JLMKR_PATH=${PWD:-.}
 fi
-if [[ ! -r "$JLMKR_PATH/jlmkr.py" ]]; then
+if [[ ! -r "$JLMKR_PATH/jlmkr" ]]; then
     >&2 printf "%s\n" \
-	"couldn't find jlmkr.py. Are you running from the jailmaker directory?" \
+	"couldn't find jlmkr. Are you running from the jailmaker directory?" \
 	"If not, setup either JLMKR_PATH or SCALE_POOL_ROOT" \
 	""
 
@@ -57,7 +57,7 @@ WAIT_FOR_JAIL=${WAIT_FOR_JAIL:-4s}
 
 #### Functions
 jlmkr () {
-    /usr/bin/env python3 "$JLMKR_PATH/jlmkr.py" "${@:---help}"
+    "$JLMKR_PATH/jlmkr" "${@:---help}"
 }
 
 iterate () {
