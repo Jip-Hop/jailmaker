@@ -7,7 +7,7 @@ dist/
 # jail-specific
 /.lxc/
 /jails/
-jlmkr
+/jlmkr
 
 # Mac-specific
 .DS_Store
