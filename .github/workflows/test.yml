@@ -39,6 +39,7 @@ jobs:
           rm /etc/resolv.conf
           echo 'nameserver 1.1.1.1' > /etc/resolv.conf
 
+          apt-get update
           apt-get install -qq -y systemd-container
 
           cat <<NETWORKCONFIG >/etc/systemd/network/10-br1.network
