@@ -18,10 +18,16 @@ from utils.config_parser import KeyValueParser, DEFAULT_CONFIG
 from utils.console import YELLOW, BOLD, NORMAL, eprint
 from utils.download import run_lxc_download_script
 from utils.files import stat_chmod, get_mount_point
-from utils.dataset import check_jail_name_valid, check_jail_name_available
-from utils.dataset import get_jail_config_path, get_jail_rootfs_path
-from utils.dataset import get_jail_path, get_zfs_dataset, create_zfs_dataset
-from utils.dataset import parse_os_release, cleanup
+from utils.jail import (
+    check_jail_name_valid,
+    check_jail_name_available,
+    get_jail_config_path,
+    get_jail_rootfs_path,
+    get_jail_path,
+)
+from utils.dataset import get_zfs_dataset, create_zfs_dataset
+from utils.jail import cleanup
+from utils.os_release import parse_os_release
 
 
 def create_jail(**kwargs):

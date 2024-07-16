@@ -4,8 +4,12 @@
 
 from actions.stop import stop_jail
 from utils.console import eprint
-from utils.dataset import check_jail_name_valid, check_jail_name_available
-from utils.dataset import get_jail_path, cleanup
+from utils.jail import (
+    check_jail_name_valid,
+    check_jail_name_available,
+    get_jail_path,
+    cleanup,
+)
 
 
 def remove_jail(jail_name):

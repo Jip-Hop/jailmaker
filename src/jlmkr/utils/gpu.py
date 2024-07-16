@@ -10,7 +10,7 @@ from textwrap import dedent
 
 from paths import SHORTNAME
 from utils.console import eprint
-from utils.dataset import get_jail_rootfs_path
+from utils.jail import get_jail_rootfs_path
 
 
 # Test intel GPU by decoding mp4 file (output is discarded)
