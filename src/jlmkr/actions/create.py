@@ -9,7 +9,7 @@ from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
 
-from cli import DISCLAIMER
+from data import DISCLAIMER
 from paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_DIR_PATH, SCRIPT_NAME
 from utils.chroot import Chroot
 from utils.config_parser import DEFAULT_CONFIG, KeyValueParser
