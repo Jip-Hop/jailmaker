@@ -11,7 +11,6 @@ import urllib.request
 from utils.console import eprint
 from utils.files import stat_chmod
 
-
 DOWNLOAD_SCRIPT_DIGEST = (
     "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
 )

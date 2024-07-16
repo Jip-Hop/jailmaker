@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-from __main__ import __disclaimer__
-from utils.console import YELLOW, BOLD, NORMAL
+from utils.console import BOLD, NORMAL, YELLOW
 
+from __main__ import __disclaimer__
 
 DISCLAIMER = f"""{YELLOW}{BOLD}{__disclaimer__}{NORMAL}"""
 

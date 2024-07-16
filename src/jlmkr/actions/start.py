@@ -6,22 +6,22 @@ import os.path
 import shlex
 import subprocess
 import tempfile
-
 from pathlib import Path
 from textwrap import dedent
 
-from actions.exec import exec_jail
-from paths import COMMAND_NAME, SHORTNAME, JAIL_ROOTFS_NAME
+from paths import COMMAND_NAME, JAIL_ROOTFS_NAME, SHORTNAME
 from utils.config_parser import parse_config_file
-from utils.console import eprint, RED, BOLD, NORMAL
-from utils.jail import (
-    get_jail_path,
-    jail_is_running,
-    get_jail_config_path,
-    get_jail_rootfs_path,
-)
+from utils.console import BOLD, NORMAL, RED, eprint
 from utils.files import stat_chmod
 from utils.gpu import passthrough_intel, passthrough_nvidia
+from utils.jail import (
+    get_jail_config_path,
+    get_jail_path,
+    get_jail_rootfs_path,
+    jail_is_running,
+)
+
+from actions.exec import exec_jail
 
 
 def start_jail(jail_name):

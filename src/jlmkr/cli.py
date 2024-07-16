@@ -6,14 +6,6 @@ import argparse
 import os
 import sys
 
-from __main__ import __version__
-from data import DISCLAIMER
-from paths import SCRIPT_PATH, COMMAND_NAME, SCRIPT_NAME
-from utils.config_parser import ExceptionWithParser
-from utils.console import fail
-from utils.editor import get_text_editor
-from utils.files import stat_chmod
-
 from actions.create import create_jail
 from actions.edit import edit_jail
 from actions.exec import exec_jail
@@ -27,14 +19,22 @@ from actions.start import start_jail
 from actions.startup import startup_jails
 from actions.status import status_jail
 from actions.stop import stop_jail
+from data import DISCLAIMER
+from paths import COMMAND_NAME, SCRIPT_NAME, SCRIPT_PATH
+from utils.config_parser import ExceptionWithParser
+from utils.console import fail
+from utils.editor import get_text_editor
+from utils.files import stat_chmod
+
+from __main__ import __version__
 
 
 def main():
     if os.stat(SCRIPT_PATH).st_uid != 0:
-      if os.environ.get('JLMKR_DEBUG') is None:
-        fail(
-            f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`."
-        )
+        if os.environ.get("JLMKR_DEBUG") is None:
+            fail(
+                f"This script should be owned by the root user... Fix it manually with: `chown root {SCRIPT_PATH}`."
+            )
 
     parser = argparse.ArgumentParser(
         description=__doc__,

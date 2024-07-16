@@ -4,11 +4,10 @@
 
 import json
 import subprocess
-
 from collections import defaultdict
 
 from utils.config_parser import parse_config_file
-from utils.console import eprint, NORMAL, UNDERLINE
+from utils.console import NORMAL, UNDERLINE, eprint
 from utils.jail import get_all_jail_names, get_jail_config_path, get_jail_rootfs_path
 from utils.os_release import parse_os_release
 

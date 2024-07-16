@@ -2,11 +2,13 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-from pathlib import PurePath
-from paths import SCRIPT_DIR_PATH
-from utils.console import eprint, fail
 import os.path
 import subprocess
+from pathlib import PurePath
+
+from paths import SCRIPT_DIR_PATH
+
+from utils.console import eprint, fail
 
 
 def _get_relative_path_in_jailmaker_dir(absolute_path):

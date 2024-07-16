@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
+from utils.console import eprint
+
 from actions.start import start_jail
 from actions.stop import stop_jail
-from utils.console import eprint
 
 
 def restart_jail(jail_name):

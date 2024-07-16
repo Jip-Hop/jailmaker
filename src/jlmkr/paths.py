@@ -4,7 +4,6 @@
 
 import os.path
 
-
 # When running as a zipapp, the script file is a parent
 ZIPAPP_PATH = os.path.realpath(__file__)
 while not os.path.exists(ZIPAPP_PATH):

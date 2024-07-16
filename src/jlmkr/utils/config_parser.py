@@ -7,8 +7,8 @@ import io
 import re
 
 from data import DEFAULT_CONFIG
-from utils.console import eprint
 
+from utils.console import eprint
 
 # Used in parser getters to indicate the default behavior when a specific
 # option is not found. Created to enable `None` as a valid fallback value.

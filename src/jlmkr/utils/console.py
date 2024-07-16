@@ -4,7 +4,6 @@
 
 import sys
 
-
 # Only set a color if we have an interactive tty
 if sys.stdout.isatty():
     BOLD = "\033[1m"

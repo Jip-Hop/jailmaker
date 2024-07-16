@@ -9,6 +9,7 @@ from utils.chroot import Chroot
 
 def parse_os_release(new_root):
     result = {}
+
     with Chroot(new_root):
         # Use chroot to correctly resolve os-release symlink (for nixos)
         for candidate in ["/etc/os-release", "/usr/lib/os-release"]:

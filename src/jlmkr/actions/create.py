@@ -5,29 +5,29 @@
 import contextlib
 import os
 import sys
-
 from inspect import cleandoc
 from pathlib import Path, PurePath
 from textwrap import dedent
 
-from actions.start import start_jail
 from cli import DISCLAIMER
-from paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_NAME, SCRIPT_DIR_PATH
+from paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_DIR_PATH, SCRIPT_NAME
 from utils.chroot import Chroot
-from utils.config_parser import KeyValueParser, DEFAULT_CONFIG
-from utils.console import YELLOW, BOLD, NORMAL, eprint
+from utils.config_parser import DEFAULT_CONFIG, KeyValueParser
+from utils.console import BOLD, NORMAL, YELLOW, eprint
+from utils.dataset import create_zfs_dataset, get_zfs_dataset
 from utils.download import run_lxc_download_script
-from utils.files import stat_chmod, get_mount_point
+from utils.files import get_mount_point, stat_chmod
 from utils.jail import (
-    check_jail_name_valid,
     check_jail_name_available,
+    check_jail_name_valid,
+    cleanup,
     get_jail_config_path,
-    get_jail_rootfs_path,
     get_jail_path,
+    get_jail_rootfs_path,
 )
-from utils.dataset import get_zfs_dataset, create_zfs_dataset
-from utils.jail import cleanup
 from utils.os_release import parse_os_release
+
+from actions.start import start_jail
 
 
 def create_jail(**kwargs):
