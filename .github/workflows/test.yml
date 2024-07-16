@@ -30,9 +30,10 @@ jobs:
 
       # Create a network namespace in the GitHub-hosted runner VM,
       # simulating a primary bridge network on TrueNAS SCALE
-      - name: Set up networking resources
+      - name: Install packages and setup networking
         run: |
           sudo -s <<END
+          set -euo pipefail
 
           systemctl disable systemd-resolved --now
           rm /etc/resolv.conf
@@ -87,6 +88,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: 1
         run: |
+          set -euo pipefail
           python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
           sudo chown 0:0 jlmkr ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
