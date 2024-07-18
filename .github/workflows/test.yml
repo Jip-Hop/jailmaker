@@ -51,8 +51,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: |
-            dist/jlmkr
             dist/jlmkr-*.zip
+          # dist/jlmkr conflicts with other job
           if-no-files-found: error
 
 
