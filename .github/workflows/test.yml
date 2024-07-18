@@ -50,9 +50,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          path:
-            - dist/jlmkr
-            - dist/jlmkr-*.zip
+          path: |
+            dist/jlmkr
+            dist/jlmkr-*.zip
           if-no-files-found: error
 
 
