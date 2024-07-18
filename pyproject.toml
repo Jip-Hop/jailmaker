@@ -19,7 +19,7 @@ authors = [
 maintainers = [
 	{name = "Jip-Hop"},
 ]
-requires-python = ">=3.8"
+requires-python = "3.11"
 
 [project.urls]
 GitHub = "https://github.com/Jip-Hop/jailmaker"
