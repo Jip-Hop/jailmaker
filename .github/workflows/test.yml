@@ -51,8 +51,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: |
+            dist/jlmkr
             dist/jlmkr-*.zip
-          # dist/jlmkr conflicts with other job
           if-no-files-found: error
 
 
@@ -133,9 +133,9 @@ jobs:
         run: |
           python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
 
-      - uses: actions/upload-artifact@v4
-        with:
-          path: jlmkr
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           path: jlmkr
 
       # Run multiple commands using the runners shell
       - name: Run the test script
