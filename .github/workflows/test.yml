@@ -25,6 +25,11 @@ jobs:
     steps:
       # hat tip: <https://github.com/pypa/hatch/issues/669>
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version-file: 'pyproject.toml'
@@ -32,11 +37,6 @@ jobs:
 
       - name: Install Hatch
         run: pip install hatch
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Build distribution
         run: hatch build --ext
