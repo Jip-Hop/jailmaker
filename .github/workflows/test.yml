@@ -30,7 +30,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version-file: 'pyproject.toml'
           cache: 'pip'
@@ -132,10 +133,6 @@ jobs:
       - name: Build
         run: |
           python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
-
-#       - uses: actions/upload-artifact@v4
-#         with:
-#           path: jlmkr
 
       # Run multiple commands using the runners shell
       - name: Run the test script
