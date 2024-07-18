@@ -12,7 +12,7 @@ from utils.console import eprint
 from utils.files import stat_chmod
 
 DOWNLOAD_SCRIPT_DIGEST = (
-    "cfcb5d08b24187d108f2ab0d21a6cc4b73dcd7f5d7dfc80803bfd7f1642d638d"
+    "645ba65a8846a2f402fc8bd870029b95fbcd3128e3046cd55642d577652cb0a0"
 )
 
 
@@ -39,7 +39,7 @@ def run_lxc_download_script(
     # Fetch the lxc download script if not present locally (or hash doesn't match)
     if not validate_sha256(lxc_download_script, DOWNLOAD_SCRIPT_DIGEST):
         urllib.request.urlretrieve(
-            "https://raw.githubusercontent.com/Jip-Hop/lxc/97f93be72ebf380f3966259410b70b1c966b0ff0/templates/lxc-download.in",
+            "https://raw.githubusercontent.com/Jip-Hop/lxc/b24d2d45b3875b013131b480e61c93b6fb8ea70c/templates/lxc-download.in",
             lxc_download_script,
         )
 
@@ -83,12 +83,7 @@ def run_lxc_download_script(
                 # Else treat this as an error and return 1
                 print(line)
 
-        rc = p1.wait()
-        # Currently --list will always return a non-zero exit code, even when listing the images was successful
-        # https://github.com/lxc/lxc/pull/4462
-        # Therefore we must currently return 0, to prevent aborting the interactive create process
-
-        # return rc
+        return p1.wait()
 
     return 0
 
