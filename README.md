@@ -2,6 +2,10 @@
 
 Persistent Linux 'jails' on TrueNAS SCALE to install software (k3s, docker, portainer, podman, etc.) with full access to all files via bind mounts.
 
+## Project Up For Adoption
+
+Please read [the announcement](https://github.com/Jip-Hop/jailmaker/discussions/241).
+
 ## Video Tutorial
 
 [![TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video](https://img.youtube.com/vi/S0nTRvAHAP8/0.jpg)<br>Watch on YouTube](https://www.youtube.com/watch?v=S0nTRvAHAP8 "TrueNAS Scale - Setting up Sandboxes with Jailmaker - YouTube Video")
