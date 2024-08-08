@@ -131,8 +131,7 @@ jobs:
       #     END
 
       - name: Build
-        run: |
-          python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
+        run: python3 build.py && ln dist/jlmkr .
 
       # Run multiple commands using the runners shell
       - name: Run the test script
