@@ -7,7 +7,7 @@ import sys
 
 from configparser import ConfigParser
 from pathlib import Path
-from utils.console import fail
+from .utils.console import fail
 
 
 def _get_selected_jailmaker_directory() -> Path:
