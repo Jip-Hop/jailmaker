@@ -64,5 +64,6 @@ def build_zip() -> Path:
 
 
 if __name__ == '__main__':
+    DIST_PATH.mkdir(exist_ok=True)
     print(build_tool())
     print(build_zip())
