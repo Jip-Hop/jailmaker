@@ -126,3 +126,8 @@ jobs:
           sudo chown 0:0 jlmkr ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
           sudo ./test/test.sh
+
+      - name: Run secondary integration tests
+        env:
+          PYTHONUNBUFFERED: 1
+        run: python3 -m scripts.test
