@@ -4,7 +4,6 @@
 
 # hat tip: <https://github.com/dairiki/hatch-zipped-directory/blob/master/hatch_zipped_directory/builder.py>
 
-import importlib
 import os
 import sys
 from io import BytesIO
