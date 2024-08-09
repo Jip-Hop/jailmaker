@@ -1,5 +1,3 @@
-# This is a basic workflow to help you get started with Actions
-
 name: CI
 
 # Controls when the workflow will run
@@ -13,28 +11,61 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  test:
-    # The type of runner that the job will run on
+
+  build-and-test:
+    name: Build jlmkr tool
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    strategy:
+      matrix:
+        python-version:
+          - "3.11"  # TrueNAS SCALE 24.04 Dragonfish
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11' # TrueNAS SCALE 24.04 Dragonfish
-      - name: Tune GitHub-hosted runner network
+      # hat tip: <https://github.com/pypa/hatch/issues/669>
+
+      - name: Tune GitHub network
         uses: smorimoto/tune-github-hosted-runner-network@v1
+
+      ##########################################################
+      ## Build software for distribution; perform code-level QA
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: 'pyproject.toml'
+          cache: 'pip'
+
+      - name: Install Hatch
+        run: pip install hatch
+
+      - name: Build distribution
+        run: python3 -m scripts.build
+        
+      - name: Run style check
+        run: hatch fmt --check || echo IGNORING ADVISORIES
+    
+      - name: Run unit tests
+        run: hatch test --cover
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            dist/jlmkr
+            dist/jlmkr-*.zip
+          if-no-files-found: error
+
+      ##########################################################
+      ## Build software for distribution; perform code-level QA
 
       # Create a network namespace in the GitHub-hosted runner VM,
       # simulating a primary bridge network on TrueNAS SCALE
-      - name: Install packages and setup networking
+      - name: Prepare for integration tests
         run: |
           sudo -s <<END
 
@@ -69,7 +100,7 @@ jobs:
           iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
           END
 
-      - name: Examine the GitHub-hosted runner environment
+      - name: Inspect the runtime environment
         run: |
           uname -r
           cat /etc/os-release
@@ -87,19 +118,11 @@ jobs:
       #     zpool --version
       #     END
 
-      - name: Build
-        run: |
-          python3 -m zipapp src/jlmkr -p "/usr/bin/env python3" -o jlmkr
-
-      - uses: actions/upload-artifact@v4
-        with:
-          path: jlmkr
-
-      # Run multiple commands using the runners shell
-      - name: Run the test script
+      - name: Run integration tests
         env:
           PYTHONUNBUFFERED: 1
         run: |
+          sudo ln dist/jlmkr .
           sudo chown 0:0 jlmkr ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
           sudo ./test/test.sh

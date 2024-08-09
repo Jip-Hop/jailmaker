@@ -6,13 +6,13 @@ import os.path
 import subprocess
 from pathlib import PurePath
 
-from paths import SCRIPT_DIR_PATH
+from paths import JAILMAKER_DIR_PATH
 
 from utils.console import eprint, fail
 
 
 def _get_relative_path_in_jailmaker_dir(absolute_path):
-    return PurePath(absolute_path).relative_to(SCRIPT_DIR_PATH)
+    return PurePath(absolute_path).relative_to(JAILMAKER_DIR_PATH)
 
 
 def get_zfs_dataset(path):
@@ -37,7 +37,7 @@ def get_zfs_base_path():
     """
     Get ZFS dataset path for jailmaker directory.
     """
-    zfs_base_path = get_zfs_dataset(SCRIPT_DIR_PATH)
+    zfs_base_path = get_zfs_dataset(JAILMAKER_DIR_PATH)
     if not zfs_base_path:
         fail("Failed to get dataset path for jailmaker directory.")
 

@@ -36,7 +36,7 @@ pre_start_hook=
 #     echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables
 
 # Specify command/script to run on the HOST after starting the jail
-# For example to attach to multiple bridge interfaces 
+# For example to attach to multiple bridge interfaces
 # when using --network-veth-extra=ve-myjail-1:veth1
 post_start_hook=
 # post_start_hook=#!/usr/bin/bash

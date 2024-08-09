@@ -10,7 +10,7 @@ from pathlib import Path, PurePath
 from textwrap import dedent
 
 from data import DISCLAIMER
-from paths import COMMAND_NAME, JAILS_DIR_PATH, SCRIPT_DIR_PATH, SCRIPT_NAME
+from paths import COMMAND_NAME, JAILS_DIR_PATH, JAILMAKER_DIR_PATH, SCRIPT_NAME
 from utils.chroot import Chroot
 from utils.config_parser import DEFAULT_CONFIG, KeyValueParser
 from utils.console import BOLD, NORMAL, YELLOW, eprint
@@ -33,19 +33,19 @@ from actions.start import start_jail
 def create_jail(**kwargs):
     print(DISCLAIMER)
 
-    if os.path.basename(SCRIPT_DIR_PATH) != "jailmaker":
+    if os.path.basename(JAILMAKER_DIR_PATH) != "jailmaker":
         eprint(
             dedent(
                 f"""
             {COMMAND_NAME} needs to create files.
             Currently it can not decide if it is safe to create files in:
-            {SCRIPT_DIR_PATH}
+            {JAILMAKER_DIR_PATH}
             Please create a dedicated dataset called "jailmaker", store {SCRIPT_NAME} there and try again."""
             )
         )
         return 1
 
-    if not PurePath(get_mount_point(SCRIPT_DIR_PATH)).is_relative_to("/mnt"):
+    if not PurePath(get_mount_point(JAILMAKER_DIR_PATH)).is_relative_to("/mnt"):
         print(
             dedent(
                 f"""
@@ -54,7 +54,7 @@ def create_jail(**kwargs):
             {SCRIPT_NAME} should be on a dataset mounted under /mnt (it currently is not).
             Storing it on the boot-pool means losing all jails when updating TrueNAS.
             Jails will be stored under:
-            {SCRIPT_DIR_PATH}
+            {JAILMAKER_DIR_PATH}
         """
             )
         )
@@ -118,7 +118,7 @@ def create_jail(**kwargs):
     try:
         # Create the dir or dataset where to store the jails
         if not os.path.exists(JAILS_DIR_PATH):
-            if get_zfs_dataset(SCRIPT_DIR_PATH):
+            if get_zfs_dataset(JAILMAKER_DIR_PATH):
                 # Creating "jails" dataset if "jailmaker" is a ZFS Dataset
                 create_zfs_dataset(JAILS_DIR_PATH)
             else:

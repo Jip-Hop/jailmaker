@@ -15,11 +15,9 @@ __disclaimer__ = """USE THIS SCRIPT AT YOUR OWN RISK!
 IT COMES WITHOUT WARRANTY AND IS NOT SUPPORTED BY IXSYSTEMS."""
 
 
-import sys
-
-from cli import main
-
 if __name__ == "__main__":
+    import sys
+    from cli import main
     try:
         sys.exit(main())
     except KeyboardInterrupt:
