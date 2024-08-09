@@ -40,7 +40,7 @@ jlmkr = "jlmkr:__main__"
 
 [[tool.hatch.build.hooks.build-scripts.scripts]]
 out_dir = "dist"
-commands = ['python ./build.py']
+commands = ['python -m scripts.build']
 artifacts = [
 	'dist/jlmkr',
 	'dist/jlmkr-*.zip'

@@ -4,7 +4,7 @@
 
 No external dependencies are needed to perform a simple build from the project directory.
 
-    python3 build.py
+    python3 -m scripts.build
 
 Anything beyond this is *completely optional…*
 
