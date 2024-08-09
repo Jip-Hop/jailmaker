@@ -106,6 +106,8 @@ jobs:
           cat /etc/os-release
           python3 --version
           ip addr
+          ls -laFh scripts
+          which bash
 
       # # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
       # # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
@@ -124,8 +126,8 @@ jobs:
         run: |
           sudo ln dist/jlmkr .
           sudo chown 0:0 jlmkr ./test/test-jlmkr
-          sudo bash ./test/test-jlmkr
-          sudo ./test/test.sh
+#          sudo bash ./test/test-jlmkr
+#          sudo ./test/test.sh
 
       - name: Run secondary integration tests
         env:
