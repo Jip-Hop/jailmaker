@@ -16,12 +16,12 @@ def _get_selected_jailmaker_directory() -> Path:
     '''
     # first choice: global --dir/-D argument
     #TODO
-    
+
     # next: JAILMAKER_DIR environment variable
     envname = 'JAILMAKER_DIR'
     if envname in os.environ:
         return Path(os.environ[envname])
-    
+
     # next: ~/.local/share/jailmaker.conf
     secname = 'DEFAULT'
     cfgname = 'jailmaker_dir'
@@ -35,17 +35,17 @@ def _get_selected_jailmaker_directory() -> Path:
         os.environ['JLMKR_DEBUG'] = cfg[secname]['ignore_owner']
     if cfgname in cfg[secname]:
         return Path(cfg[secname][cfgname])
-    
+
     # next: parent directory of script iff it's named jailmaker
     script = get_tool_path_on_disk()
     if script.parent.name == 'jailmaker':
         return script.parent
-    
+
     # next: current directory iff it's named jailmaker
     cwd = Path.cwd()
     if cwd.name == 'jailmaker':
         return cwd
-    
+
     fail("Please specify a jailmaker directory path (JAILMAKER_DIR)")
 
 
