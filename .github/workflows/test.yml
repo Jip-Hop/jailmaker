@@ -13,9 +13,7 @@ on:
 
 jobs:
 
-  ##########################################################
-  ## Build software for distribution; perform code-level QA
-  build:
+  build-and-test:
     name: Build jlmkr tool
     runs-on: ubuntu-24.04
     strategy:
@@ -25,6 +23,9 @@ jobs:
     steps:
       # hat tip: <https://github.com/pypa/hatch/issues/669>
 
+      ##########################################################
+      ## Build software for distribution; perform code-level QA
+      
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -48,36 +49,14 @@ jobs:
       - name: Run unit tests
         run: hatch test --cover
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          path: |
-            dist/jlmkr
-            dist/jlmkr-*.zip
-          if-no-files-found: error
+      ##########################################################
+      ## Build software for distribution; perform code-level QA
 
-
-  ##########################################################
-  ## Perform rubber-meets-road integration testing
-  test:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11' # TrueNAS SCALE 24.04 Dragonfish
-      - name: Tune GitHub-hosted runner network
-        uses: smorimoto/tune-github-hosted-runner-network@v1
+      - uses: smorimoto/tune-github-hosted-runner-network@v1
 
       # Create a network namespace in the GitHub-hosted runner VM,
       # simulating a primary bridge network on TrueNAS SCALE
-      - name: Install packages and setup networking
+      - name: Prepare for integration tests
         run: |
           sudo -s <<END
 
@@ -112,7 +91,7 @@ jobs:
           iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
           END
 
-      - name: Examine the GitHub-hosted runner environment
+      - name: Inspect the runtime environment
         run: |
           uname -r
           cat /etc/os-release
@@ -130,14 +109,22 @@ jobs:
       #     zpool --version
       #     END
 
-      - name: Build
-        run: python3 build.py && ln dist/jlmkr .
-
-      # Run multiple commands using the runners shell
-      - name: Run the test script
+      - name: Run integration tests
         env:
           PYTHONUNBUFFERED: 1
         run: |
+          sudo ln dist/jlmkr .
           sudo chown 0:0 jlmkr ./test/test-jlmkr
           sudo bash ./test/test-jlmkr
           sudo ./test/test.sh
+
+      ##########################################################
+      ## Release build artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            dist/jlmkr
+            dist/jlmkr-*.zip
+          if-no-files-found: error
