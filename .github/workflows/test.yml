@@ -44,7 +44,7 @@ jobs:
         run: pip install hatch
 
       - name: Build distribution
-        run: hatch build --ext
+        run: python3 -m scripts.build
         
       - name: Run style check
         run: hatch fmt --check || echo IGNORING ADVISORIES
