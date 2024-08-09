@@ -23,6 +23,9 @@ jobs:
     steps:
       # hat tip: <https://github.com/pypa/hatch/issues/669>
 
+      - name: Tune GitHub network
+        uses: smorimoto/tune-github-hosted-runner-network@v1
+
       ##########################################################
       ## Build software for distribution; perform code-level QA
       
@@ -51,8 +54,6 @@ jobs:
 
       ##########################################################
       ## Build software for distribution; perform code-level QA
-
-      - uses: smorimoto/tune-github-hosted-runner-network@v1
 
       # Create a network namespace in the GitHub-hosted runner VM,
       # simulating a primary bridge network on TrueNAS SCALE
