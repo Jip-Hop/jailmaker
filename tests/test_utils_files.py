@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-from jlmkr.utils.files import get_mount_point
+from utils.files import get_mount_point
 
 
 def test_mount_point():

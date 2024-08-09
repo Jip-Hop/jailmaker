@@ -58,7 +58,7 @@ python = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = "src"
+pythonpath = "src/jlmkr"
 addopts = [
     "--import-mode=importlib",
 ]

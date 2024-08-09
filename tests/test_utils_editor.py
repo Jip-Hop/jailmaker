@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: LGPL-3.0-only
 
-from jlmkr.utils import editor
+from utils import editor
 
 from pathlib import Path
 
