@@ -98,6 +98,8 @@ jobs:
 
           iptables -I DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
           iptables -I DOCKER-USER -i br1 -o eth0 -j ACCEPT
+
+          modprobe zfs
           END
 
       - name: Inspect the runtime environment
@@ -106,8 +108,7 @@ jobs:
           cat /etc/os-release
           python3 --version
           ip addr
-          ls -laFh scripts
-          which bash
+          zfs version
 
       # # TODO: create zpool with virtual disks, create jailmaker dataset and test jlmkr.py from there
       # # https://medium.com/@abaddonsd/zfs-usage-with-virtual-disks-62898064a29b
@@ -126,10 +127,12 @@ jobs:
         run: |
           sudo ln dist/jlmkr .
           sudo chown 0:0 jlmkr ./test/test-jlmkr
-#          sudo bash ./test/test-jlmkr
-#          sudo ./test/test.sh
+          sudo bash ./test/test-jlmkr
+          sudo ./test/test.sh
 
       - name: Run secondary integration tests
         env:
           PYTHONUNBUFFERED: 1
-        run: python3 -m scripts.test
+        run: |
+          chmod +x scripts/*
+          python3 -m scripts.test
