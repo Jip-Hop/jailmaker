@@ -38,6 +38,12 @@ Use `hatch` to build, test, lint, etc.
 
     hatch build
 
+    hatch fmt --check
+
+    hatch test --cover
+
+*Please don't forget to run tests before submitting a pull request!*
+
 ## Integration testing
 
 See [`test/README.md`](./test/README.md).
