@@ -10,10 +10,12 @@ from contextlib import AbstractContextManager, chdir
 from pathlib import Path
 from subprocess import run, PIPE, STDOUT, CalledProcessError
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from time import sleep
 
 SUDO = '/usr/bin/sudo'
 ZPOOL = '/sbin/zpool'
 ZFS = '/sbin/zfs'
+MACHINECTL = '/usr/bin/machinectl'
 
 
 class TemporaryPool(AbstractContextManager):
@@ -52,7 +54,29 @@ class JailmakerDataset(AbstractContextManager):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        for straggler in self.find_running_stragglers():
+            print(f'⚠️  Terminating {straggler}', file=sys.stderr)
+            run([SUDO, MACHINECTL, 'terminate', straggler], check=False)
+            for tries in range(10):
+                attempt = run([MACHINECTL, 'show', straggler],
+                    capture_output=True, check=False)
+                if not attempt.stdout:
+                    break
+                sleep(0.5)
         run([SUDO, ZFS, 'destroy', '-r', self.name], check=False)
+
+    def find_running_stragglers(self):
+        machinelist = run([MACHINECTL, 'list', '--no-legend'],
+                capture_output=True, check=False)
+        for listing in machinelist.stdout.decode().splitlines():
+            machinename = listing.partition(' ')[0]
+            lookup = run([MACHINECTL, 'show',
+                    '-p', 'RootDirectory', '--value',
+                    machinename],
+                    capture_output=True, check=False)
+            machinepath = lookup.stdout.decode()
+            if machinepath.startswith(str(self.path)):
+                yield machinename
 
 
 def run_test(path):
