@@ -7,6 +7,7 @@
 |TrueNAS 22.12|❌|
 |TrueNAS 23.10|✅|
 |TrueNAS 24.04|✅|
+|TrueNAS 24.10|✅|
 
 ## Distro Compatibility
 |   |   |
