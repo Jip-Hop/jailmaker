@@ -2,9 +2,9 @@
 
 Persistent Linux 'jails' on TrueNAS SCALE to install software (k3s, docker, portainer, podman, etc.) with full access to all files via bind mounts.
 
-## Project Up For Adoption
+## Project Unmaintained
 
-Please read [the announcement](https://github.com/Jip-Hop/jailmaker/discussions/241).
+[As announced](https://github.com/Jip-Hop/jailmaker/discussions/241) this repo is no longer maintained by the original author: Jip-Hop. The final release is v2.1.1 which has been tested to be compatible with TrueNAS SCALE 24.10.0. Perhaps development continues in [one of the forks](https://github.com/Jip-Hop/jailmaker/forks). But since [iX has decided to integrate Incus in the SCALE 25.04 Fangtooth](https://github.com/truenas/middleware/pull/14592) it's probably best to start using that once it's available instead of relying on `jailmaker` and `systemd-nspawn`.
 
 ## Video Tutorial
 
